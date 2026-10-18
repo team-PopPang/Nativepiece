@@ -1,0 +1,15 @@
+{
+  "name": "nativepiece-monorepo",
+  "private": true,
+  "workspaces": [
+    "packages/cli",
+    "packages/runtime"
+  ],
+  "scripts": {
+    "build": "npm run build --workspaces --if-present",
+    "typecheck": "npm run typecheck --workspaces --if-present"
+  },
+  "engines": {
+    "node": ">=22.11.0"
+  }
+}

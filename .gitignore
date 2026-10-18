@@ -1,0 +1,5 @@
+node_modules/
+dist/
+.nativepiece/
+.DS_Store
+*.tsbuildinfo
