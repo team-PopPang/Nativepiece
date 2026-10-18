@@ -6,6 +6,7 @@ import { loadConfig } from './config.js';
 import { resolveRNProject } from './project.js';
 import { bundle, type Platform } from './commands/bundle.js';
 import { buildIOS } from './commands/build-ios.js';
+import { buildAndroid } from './commands/build-android.js';
 import { packagePath } from './utils/assets.js';
 import { log } from './utils/log.js';
 
@@ -58,7 +59,7 @@ program
       if (platform === 'ios') {
         await buildIOS(config, project, options);
       } else if (platform === 'android') {
-        throw new Error('Android 빌드는 아직 구현 중이에요.');
+        await buildAndroid(config, project);
       } else {
         throw new Error(`지원하지 않는 플랫폼이에요: ${platform}`);
       }

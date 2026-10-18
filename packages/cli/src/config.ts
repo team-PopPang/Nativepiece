@@ -49,8 +49,8 @@ const configSchema = z.object({
       group: z.string().regex(/^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$/, '예: com.example'),
       artifactId: z.string().regex(/^[a-z][a-z0-9-]*$/).optional(),
       namespace: z.string().regex(/^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$/).optional(),
-      minSdk: z.number().int().min(24).default(24),
-      compileSdk: z.number().int().default(36),
+      minSdk: z.number().int().min(24).optional(),
+      compileSdk: z.number().int().optional(),
       abis: z.array(androidAbi).nonempty().default(['arm64-v8a', 'x86_64']),
     })
     .optional(),
@@ -73,8 +73,8 @@ export interface ResolvedConfig {
     group: string;
     artifactId: string;
     namespace: string;
-    minSdk: number;
-    compileSdk: number;
+    minSdk?: number;
+    compileSdk?: number;
     abis: string[];
   } | null;
   projectRoot: string;
