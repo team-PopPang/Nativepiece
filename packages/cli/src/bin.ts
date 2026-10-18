@@ -8,6 +8,8 @@ import { bundle, type Platform } from './commands/bundle.js';
 import { buildIOS } from './commands/build-ios.js';
 import { buildAndroid } from './commands/build-android.js';
 import { generateSources, writeGeneratedSources } from './codegen/index.js';
+import { doctor } from './commands/doctor.js';
+import { init } from './commands/init.js';
 import { packagePath } from './utils/assets.js';
 import { log } from './utils/log.js';
 
@@ -44,6 +46,28 @@ program
       const { project, config } = await loadProject(options.projectRoot);
       const output = await bundle(config, project, platform as Platform);
       log.success(`번들을 만들었어요: ${output.bundleFile}`);
+    }),
+  );
+
+program
+  .command('init')
+  .description('기존 RN 앱을 Nativepiece 모듈로 만들 수 있게 설정해요')
+  .option('--project-root <path>', 'RN 프로젝트 경로', '.')
+  .option('-y, --yes', '확인 없이 진행해요')
+  .action(
+    action(async (options: { projectRoot: string; yes?: boolean }) => {
+      await init(resolveRNProject(path.resolve(options.projectRoot)), options);
+    }),
+  );
+
+program
+  .command('doctor')
+  .description('모듈 프로젝트와 개발 환경을 점검해요')
+  .option('--project-root <path>', 'RN 프로젝트 경로', '.')
+  .action(
+    action(async (options: { projectRoot: string }) => {
+      const ok = await doctor(resolveRNProject(path.resolve(options.projectRoot)));
+      if (!ok) process.exitCode = 1;
     }),
   );
 

@@ -21,7 +21,7 @@ function isJdk17(home: string | undefined): home is string {
 }
 
 // Gradle은 JDK 17로 실행한다. JAVA_HOME이 17이 아니면 알려진 설치 위치를 찾는다.
-async function resolveJavaHome(): Promise<string> {
+export async function resolveJavaHome(): Promise<string> {
   const candidates = [process.env.JAVA_HOME_17, process.env.JAVA_HOME];
   try {
     candidates.push((await run('/usr/libexec/java_home', ['-v', '17'], { inherit: false })).trim());

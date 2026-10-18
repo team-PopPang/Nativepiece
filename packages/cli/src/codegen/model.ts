@@ -135,6 +135,13 @@ class Extractor {
       return { kind: 'array', element: this.convert(element, `${contextName}Item`, node) };
     }
 
+    if (this.isBuiltIn(type)) {
+      throw new ContractError(
+        `${location(node)}: ${this.checker.typeToString(type)} 타입은 JSON으로 주고받을 수 없어요. ` +
+          '날짜는 ISO 문자열(string)이나 timestamp(number)로 바꿔 주세요.',
+      );
+    }
+
     if (this.isPlainObject(type)) {
       const indexValue = this.indexValue(type);
       if (indexValue && this.checker.getPropertiesOfType(type).length === 0) {
@@ -157,6 +164,12 @@ class Extractor {
       return this.enumType(union, contextName, members.map((member) => (member as ts.StringLiteralType).value));
     }
     throw new ContractError(`${location(node)}: ${this.checker.typeToString(union)} 같은 서로 다른 타입의 union은 지원하지 않아요.`);
+  }
+
+  // Date, Map, Promise처럼 TS 기본 라이브러리에 선언된 타입이다.
+  private isBuiltIn(type: ts.Type): boolean {
+    const declarations = (type.aliasSymbol ?? type.getSymbol())?.getDeclarations() ?? [];
+    return declarations.some((declaration) => /[\\/]typescript[\\/]lib[\\/]lib\.[^\\/]*\.d\.ts$/.test(declaration.getSourceFile().fileName));
   }
 
   private isPlainObject(type: ts.Type): boolean {
