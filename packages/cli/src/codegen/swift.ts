@@ -142,7 +142,7 @@ function renderHost(model: ContractModel, moduleName: string): string[] {
     '    /// 런타임을 시작하고 `call` 처리기를 등록해요. 앱 시작 시점(AppDelegate 등)에 한 번 호출해요.',
     '    /// host는 앱이 살아 있는 동안 강하게 참조해요.',
     '    @MainActor',
-    `    public static func start(host: some ${protocolName}, prewarm: Bool = true) {`,
+    `    public static func start(host: some ${protocolName}, prewarm: Bool = true, devServer: NativepieceDevServer? = nil) {`,
   );
   for (const call of model.calls) {
     const name = JSON.stringify(call.name);
@@ -154,7 +154,7 @@ function renderHost(model: ContractModel, moduleName: string): string[] {
       lines.push(`        Nativepiece.shared.handle(${name}) { ${body} }`);
     }
   }
-  lines.push('        start(prewarm: prewarm)', '    }', '}', '');
+  lines.push('        start(prewarm: prewarm, devServer: devServer)', '    }', '}', '');
   return lines;
 }
 

@@ -1,6 +1,9 @@
 package io.nativepiece.host
 
 import android.app.Application
+import android.content.pm.ApplicationInfo
+import android.security.NetworkSecurityPolicy
+import android.util.Log
 import com.facebook.react.ReactHost
 import com.facebook.react.defaults.DefaultNewArchitectureEntryPoint
 import com.facebook.react.defaults.DefaultReactHost
@@ -14,18 +17,35 @@ import com.facebook.soloader.SoLoader
  */
 object Nativepiece {
     internal const val BUNDLE_ASSET_NAME = "main.android.bundle"
+    private const val TAG = "Nativepiece"
 
     private var host: ReactHost? = null
 
     internal val reactHost: ReactHost
         get() = host ?: error("Nativepiece.init(application)을 먼저 호출해 주세요.")
 
-    /** 런타임을 만들어요. [prewarm]이 true면 화면을 열기 전에 JS 번들을 미리 불러와요. */
+    /**
+     * 런타임을 만들어요. [prewarm]이 true면 화면을 열기 전에 JS 번들을 미리 불러와요.
+     *
+     * [devServerEntry]를 넘기면 디버그 빌드에서 Metro 개발 서버의 번들을 써요(Fast Refresh, 개발 메뉴 포함).
+     * Metro에 연결할 수 없으면 앱에 들어 있는 번들로 돌아가요. 릴리스 빌드에서는 무시해요.
+     */
     @JvmStatic
     @JvmOverloads
     @Synchronized
-    fun init(application: Application, prewarm: Boolean = true) {
+    fun init(application: Application, prewarm: Boolean = true, devServerEntry: String? = null) {
         if (host != null) return
+
+        val debuggable = application.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0
+        val useDevServer = devServerEntry != null && debuggable
+        if (useDevServer && !NetworkSecurityPolicy.getInstance().isCleartextTrafficPermitted("10.0.2.2")) {
+            // Metro는 http라서 평문 통신이 막혀 있으면 연결 확인이 조용히 실패하고 앱 안의 번들을 쓴다.
+            Log.w(
+                TAG,
+                "평문 HTTP가 막혀 있어서 Metro에 연결할 수 없어요. 앱의 src/debug/AndroidManifest.xml에 " +
+                    "<application android:usesCleartextTraffic=\"true\" />를 추가해 주세요.",
+            )
+        }
 
         Channel.install()
         SoLoader.init(application, OpenSourceMergedSoMapping)
@@ -34,8 +54,9 @@ object Nativepiece {
         val reactHost = DefaultReactHost.getDefaultReactHost(
             context = application,
             packageList = NativepiecePackageList(application).packages,
+            jsMainModulePath = devServerEntry ?: "index",
             jsBundleAssetPath = BUNDLE_ASSET_NAME,
-            useDevSupport = false,
+            useDevSupport = useDevServer,
         )
         host = reactHost
         if (prewarm) reactHost.start()

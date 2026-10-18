@@ -4,7 +4,7 @@ import path from 'node:path';
 import type { ResolvedConfig } from '../config.js';
 import type { RNProject } from '../project.js';
 import { workspaceDir } from '../project.js';
-import { buildFrameworks, loadCachedFrameworks } from '../ios/frameworks.js';
+import { buildFrameworks, loadCachedFrameworks, type IOSConfiguration } from '../ios/frameworks.js';
 import { assembleSwiftPackage } from '../ios/package.js';
 import { prepareIOSWorkspace, type IOSWorkspace } from '../ios/workspace.js';
 import { packagePath } from '../utils/assets.js';
@@ -17,6 +17,8 @@ import { generateSources } from '../codegen/index.js';
 export interface BuildIOSOptions {
   force?: boolean;
   forcePodInstall?: boolean;
+  // true면 Metro 개발 서버와 Fast Refresh를 쓸 수 있는 개발용 패키지를 만든다.
+  dev?: boolean;
 }
 
 const LOCKFILES = ['package-lock.json', 'yarn.lock', 'pnpm-lock.yaml', 'bun.lockb'];
@@ -80,9 +82,15 @@ function hashNativeSources(fingerprint: Fingerprint, directory: string, contents
 }
 
 // 네이티브 XCFramework 결과에 영향을 주는 입력이다. JS만 바뀌면 이 값이 같아서 archive를 건너뛴다.
-async function frameworksFingerprint(config: ResolvedConfig, project: RNProject, workspace: IOSWorkspace): Promise<string> {
+async function frameworksFingerprint(
+  config: ResolvedConfig,
+  project: RNProject,
+  workspace: IOSWorkspace,
+  configuration: IOSConfiguration,
+): Promise<string> {
   const xcodeVersion = await run('xcodebuild', ['-version'], { inherit: false });
   const fingerprint = new Fingerprint('nativepiece-ios-frameworks-v2')
+    .value('configuration', configuration)
     .value('cli', cliVersion())
     .value('xcode', xcodeVersion)
     .value('deploymentTarget', config.ios.deploymentTarget)
@@ -128,19 +136,21 @@ export async function buildIOS(config: ResolvedConfig, project: RNProject, optio
   const workspace = await prepareIOSWorkspace(config, project);
   await installPodsIfNeeded(config, project, workspace, Boolean(options.forcePodInstall));
 
-  const fingerprint = await frameworksFingerprint(config, project, workspace);
+  const configuration: IOSConfiguration = options.dev ? 'Debug' : 'Release';
+  const fingerprint = await frameworksFingerprint(config, project, workspace, configuration);
   const cacheDir = path.join(workspace.dir, 'build', 'frameworks', fingerprint);
   let frameworks = options.force ? null : await loadCachedFrameworks(cacheDir);
   if (frameworks) {
     log.info('네이티브 입력이 바뀌지 않아 Xcode archive를 건너뛰어요.');
   } else {
-    frameworks = await buildFrameworks(workspace, config, cacheDir);
+    frameworks = await buildFrameworks(workspace, config, configuration, cacheDir);
   }
 
   log.step('Swift Package 생성');
-  const outDir = workspaceDir(project.root, 'output', 'ios', config.name);
+  const outDir = workspaceDir(project.root, 'output', options.dev ? 'ios-dev' : 'ios', config.name);
   await assembleSwiftPackage(config, frameworks, jsBundle, generated, outDir);
 
-  log.success(`Swift Package를 만들었어요: ${outDir}`);
+  log.success(`Swift Package를 만들었어요${options.dev ? ' (개발용)' : ''}: ${outDir}`);
+  if (options.dev) log.info('개발용 패키지는 앱 배포에 쓰지 마세요. `npx nativepiece dev`로 Metro를 띄운 뒤 start(devServer:)로 연결해요.');
   return outDir;
 }

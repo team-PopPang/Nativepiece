@@ -15,6 +15,11 @@ export interface GeneratedSources {
 
 const EMPTY_MODEL: ContractModel = { screens: [], events: [], calls: [], messages: [], objects: [], enums: [] };
 
+// Metro가 번들링할 진입점. URL 경로로 쓰이므로 확장자를 뺀다.
+export function devServerEntry(config: ResolvedConfig): string {
+  return config.entry.replace(/\.[cm]?[jt]sx?$/, '');
+}
+
 export function contractPath(config: ResolvedConfig): string {
   return path.resolve(config.projectRoot, config.contract);
 }
@@ -26,7 +31,7 @@ export function generateSources(config: ResolvedConfig): GeneratedSources {
   const kotlinPackage = config.android?.namespace ?? `io.nativepiece.${config.name.toLowerCase()}`;
   return {
     swift: model ? renderSwift(model, config.name, config.version) : null,
-    kotlin: renderKotlin(model ?? EMPTY_MODEL, config.name, kotlinPackage, config.version),
+    kotlin: renderKotlin(model ?? EMPTY_MODEL, config.name, kotlinPackage, config.version, devServerEntry(config)),
     kotlinPackage,
   };
 }

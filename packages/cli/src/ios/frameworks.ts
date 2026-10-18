@@ -38,7 +38,16 @@ async function findDirs(root: string, predicate: (fullPath: string, name: string
   return results;
 }
 
-async function archive(workspace: IOSWorkspace, config: ResolvedConfig, sdk: string, archivePath: string, derivedData: string) {
+export type IOSConfiguration = 'Debug' | 'Release';
+
+async function archive(
+  workspace: IOSWorkspace,
+  config: ResolvedConfig,
+  configuration: IOSConfiguration,
+  sdk: string,
+  archivePath: string,
+  derivedData: string,
+) {
   await run(
     'xcodebuild',
     [
@@ -52,7 +61,7 @@ async function archive(workspace: IOSWorkspace, config: ResolvedConfig, sdk: str
       '-derivedDataPath',
       derivedData,
       '-configuration',
-      'Release',
+      configuration,
       '-sdk',
       sdk,
       '-quiet',
@@ -198,20 +207,26 @@ export async function loadCachedFrameworks(cacheDir: string): Promise<Frameworks
 }
 
 // Pods를 archive해 배포용 XCFramework 세트를 만든다. 결과는 fingerprint별 캐시 디렉터리에 저장한다.
-export async function buildFrameworks(workspace: IOSWorkspace, config: ResolvedConfig, cacheDir: string): Promise<FrameworksOutput> {
+// configuration이 Debug면 RN의 debug prebuilt(개발 메뉴, Fast Refresh 포함)를 쓰는 개발용 세트를 만든다.
+export async function buildFrameworks(
+  workspace: IOSWorkspace,
+  config: ResolvedConfig,
+  configuration: IOSConfiguration,
+  cacheDir: string,
+): Promise<FrameworksOutput> {
   const staging = `${cacheDir}.staging`;
   await rm(staging, { recursive: true, force: true });
   const frameworksDir = path.join(staging, 'Frameworks');
   await mkdir(frameworksDir, { recursive: true });
 
-  const derivedData = path.join(workspace.dir, 'build', 'DerivedData');
+  const derivedData = path.join(workspace.dir, 'build', `DerivedData-${configuration}`);
   const simArchive = path.join(staging, 'archives', `${PREBUILD_TARGET}-iphonesimulator.xcarchive`);
   const deviceArchive = path.join(staging, 'archives', `${PREBUILD_TARGET}-iphoneos.xcarchive`);
 
-  log.step('Xcode archive (iOS Simulator)');
-  await archive(workspace, config, 'iphonesimulator', simArchive, derivedData);
-  log.step('Xcode archive (iOS)');
-  await archive(workspace, config, 'iphoneos', deviceArchive, derivedData);
+  log.step(`Xcode archive (iOS Simulator, ${configuration})`);
+  await archive(workspace, config, configuration, 'iphonesimulator', simArchive, derivedData);
+  log.step(`Xcode archive (iOS, ${configuration})`);
+  await archive(workspace, config, configuration, 'iphoneos', deviceArchive, derivedData);
 
   log.step('XCFramework 생성');
   await createXCFrameworks(simArchive, deviceArchive, frameworksDir);

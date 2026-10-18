@@ -12,6 +12,7 @@ import { doctor } from './commands/doctor.js';
 import { init } from './commands/init.js';
 import { packagePath } from './utils/assets.js';
 import { log } from './utils/log.js';
+import { run } from './utils/exec.js';
 
 const version = JSON.parse(readFileSync(packagePath('package.json'), 'utf8')).version;
 
@@ -72,6 +73,22 @@ program
   );
 
 program
+  .command('dev')
+  .description('Metro 개발 서버를 띄워요. 호스트 앱에서 start(devServer:)로 연결해요')
+  .option('--project-root <path>', 'RN 프로젝트 경로', '.')
+  .option('--port <port>', 'Metro 포트', '8081')
+  .action(
+    action(async (options: { projectRoot: string; port: string }) => {
+      const { project, config } = await loadProject(options.projectRoot);
+      log.step(`Metro 시작 (진입점: ${config.entry}, 포트: ${options.port})`);
+      log.info('Android 에뮬레이터는 `adb reverse tcp:8081 tcp:8081` 없이도 10.0.2.2로 연결돼요.');
+      await run(process.execPath, [path.join(project.reactNativePath, 'cli.js'), 'start', '--port', options.port], {
+        cwd: project.root,
+      });
+    }),
+  );
+
+program
   .command('codegen')
   .description('계약 파일(nativepiece.contract.ts)에서 Swift·Kotlin 코드를 만들어요')
   .option('--project-root <path>', 'RN 프로젝트 경로', '.')
@@ -90,8 +107,9 @@ program
   .option('--project-root <path>', 'RN 프로젝트 경로', '.')
   .option('--force', '캐시를 쓰지 않고 네이티브 빌드를 다시 해요')
   .option('--force-pod-install', 'pod install을 다시 실행해요')
+  .option('--dev', 'Metro 개발 서버를 쓸 수 있는 개발용 결과물을 만들어요 (iOS)')
   .action(
-    action(async (platform: string, options: { projectRoot: string; force?: boolean; forcePodInstall?: boolean }) => {
+    action(async (platform: string, options: { projectRoot: string; force?: boolean; forcePodInstall?: boolean; dev?: boolean }) => {
       const { project, config } = await loadProject(options.projectRoot);
       if (platform === 'ios') {
         await buildIOS(config, project, options);
