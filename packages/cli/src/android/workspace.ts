@@ -335,8 +335,10 @@ android {
             java.srcDirs += ["src/generated/java"]
             assets.srcDirs += ["src/generated/assets"]
             res.srcDirs += ["src/generated/res"]
-            jniLibs.srcDirs += ["src/generated/jniLibs"]
         }
+        // RN의 C++ ABI가 build type마다 달라서 debug·release용 .so를 따로 넣는다.
+        debug.jniLibs.srcDirs += ["src/generated/jniLibs/debug"]
+        release.jniLibs.srcDirs += ["src/generated/jniLibs/release"]
     }
 
     compileOptions {
@@ -345,7 +347,8 @@ android {
     }
 
     publishing {
-        singleVariant("release") {
+        multipleVariants {
+            allVariants()
             withSourcesJar()
         }
     }
@@ -370,7 +373,8 @@ afterEvaluate {
     publishing {
         publications {
             release(MavenPublication) {
-                from components.release
+                // 호스트 앱의 build type에 맞는 variant를 Gradle module metadata로 고르게 한다.
+                from components.default
                 groupId = ${groovyString(android.group)}
                 artifactId = ${groovyString(android.artifactId)}
                 version = rootProject.ext.nativepieceVersion

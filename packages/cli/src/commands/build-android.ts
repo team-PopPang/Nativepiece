@@ -56,25 +56,32 @@ async function findFiles(root: string, predicate: (name: string) => boolean): Pr
   return results;
 }
 
+const VARIANTS = ['debug', 'release'] as const;
+
 // 빈 앱 모듈을 빌드해 C++ autolinking 결과(.so)를 SDK 모듈의 jniLibs로 옮긴다.
+// RN의 C++ ABI가 build type마다 달라서 debug·release 결과를 각각 가져간다.
 async function collectLinkageLibraries(workspace: AndroidWorkspace, javaHome: string, abis: string[]) {
   log.step('C++ autolinking 빌드');
-  await gradle(workspace, javaHome, [`:${LINKAGE_PROJECT}:mergeReleaseNativeLibs`]);
+  await gradle(workspace, javaHome, VARIANTS.map((variant) => `:${LINKAGE_PROJECT}:merge${variant[0].toUpperCase()}${variant.slice(1)}NativeLibs`));
 
-  const mergedDir = path.join(workspace.dir, LINKAGE_PROJECT, 'build', 'intermediates', 'merged_native_libs', 'release');
-  const libraries = await findFiles(mergedDir, (name) => name === 'libappmodules.so' || /^libreact_codegen_.+\.so$/.test(name));
-  const jniLibsDir = path.join(workspace.sdkDir, 'src', 'generated', 'jniLibs');
-  await rm(jniLibsDir, { recursive: true, force: true });
+  const jniLibsRoot = path.join(workspace.sdkDir, 'src', 'generated', 'jniLibs');
+  await rm(jniLibsRoot, { recursive: true, force: true });
 
-  for (const library of libraries) {
-    const abi = path.basename(path.dirname(library));
-    await mkdir(path.join(jniLibsDir, abi), { recursive: true });
-    await cp(library, path.join(jniLibsDir, abi, path.basename(library)));
-  }
+  for (const variant of VARIANTS) {
+    const mergedDir = path.join(workspace.dir, LINKAGE_PROJECT, 'build', 'intermediates', 'merged_native_libs', variant);
+    const libraries = await findFiles(mergedDir, (name) => name === 'libappmodules.so' || /^libreact_codegen_.+\.so$/.test(name));
+    const jniLibsDir = path.join(jniLibsRoot, variant);
 
-  for (const abi of abis) {
-    if (!existsSync(path.join(jniLibsDir, abi, 'libappmodules.so'))) {
-      throw new Error(`libappmodules.so를 찾지 못했어요 (${abi}): ${mergedDir}`);
+    for (const library of libraries) {
+      const abi = path.basename(path.dirname(library));
+      await mkdir(path.join(jniLibsDir, abi), { recursive: true });
+      await cp(library, path.join(jniLibsDir, abi, path.basename(library)));
+    }
+
+    for (const abi of abis) {
+      if (!existsSync(path.join(jniLibsDir, abi, 'libappmodules.so'))) {
+        throw new Error(`${variant} libappmodules.so를 찾지 못했어요 (${abi}): ${mergedDir}`);
+      }
     }
   }
 }
@@ -104,12 +111,13 @@ export async function buildAndroid(config: ResolvedConfig, project: RNProject): 
   await gradle(workspace, javaHome, ['publishNativepiece']);
 
   const artifactDir = path.join(workspace.repositoryDir, ...config.android.group.split('.'), config.android.artifactId, config.version);
-  const aar = path.join(artifactDir, `${config.android.artifactId}-${config.version}.aar`);
-  if (!existsSync(aar)) throw new Error(`AAR이 만들어지지 않았어요: ${aar}`);
-
-  const entries = await run('unzip', ['-l', aar], { inherit: false });
-  for (const required of [`assets/${BUNDLE_FILE_NAME.android}`, 'libappmodules.so']) {
-    if (!entries.includes(required)) throw new Error(`AAR에 ${required}이(가) 없어요: ${aar}`);
+  for (const variant of VARIANTS) {
+    const aar = path.join(artifactDir, `${config.android.artifactId}-${config.version}-${variant}.aar`);
+    if (!existsSync(aar)) throw new Error(`${variant} AAR이 만들어지지 않았어요: ${aar}`);
+    const entries = await run('unzip', ['-l', aar], { inherit: false });
+    for (const required of [`assets/${BUNDLE_FILE_NAME.android}`, 'libappmodules.so']) {
+      if (!entries.includes(required)) throw new Error(`${variant} AAR에 ${required}이(가) 없어요: ${aar}`);
+    }
   }
 
   log.success(`Maven 저장소를 만들었어요: ${workspace.repositoryDir}`);

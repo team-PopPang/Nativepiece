@@ -668,6 +668,18 @@ API 기본 URL 하드코딩(`https://poppang.co.kr/api/v1`)은 Nativepiece와 �
 | 지원 RN 하한 | 0.84. 첫 릴리스 검증은 0.86으로 해요 | prebuilt core가 기본인 버전부터 지원해요 |
 | 라이선스와 공개 범위 | 미정 | — |
 
+### 13.1 구현하며 바뀐 결정 (2026-10-18, P0)
+
+| 항목 | 스펙 초안 | 실제 구현 | 이유 |
+|---|---|---|---|
+| Android 패키징 | fat AAR 하나 (Callstack 플러그인) | SDK AAR 하나 + 네이티브 모듈별 AAR을 담은 Maven 저장소. 호스트 앱은 SDK 의존성 하나만 추가해요 | Callstack Gradle 플러그인 최신 버전이 alpha(2.0.0-alpha10)예요. PopPang에서 검증된 방식을 쓰고, 697MB의 원인이었던 Gradle 캐시 미러링만 없앴어요. 결과는 39MB예요 |
+| Android variant | release만 발행 | debug·release 둘 다 발행 | RN의 C++ ABI가 build type마다 달라요. release `.so`를 debug 앱에서 쓰면 `HostPlatformViewProps`에서 SIGSEGV가 나는 것을 에뮬레이터에서 확인했어요 |
+| 화면 등록 이름 | `<config.name>.<screenKey>` | `<screenKey>` | 앱에 모듈을 하나만 넣기로 해서 접두사가 필요 없어요 |
+| 패키지 매니저 | pnpm | npm workspaces | PopPang-RN과 같은 도구를 써요 |
+| iOS 프로젝트 생성 | xcodeproj gem | `project.pbxproj`를 직접 생성 | Homebrew로 설치한 CocoaPods의 gem은 일반 ruby에서 불러올 수 없어요 |
+
+**알려진 제약:** iOS Swift Package는 `-ObjC`와 weak framework 링크에 `unsafeFlags`를 써요. SwiftPM은 원격(`.package(url:)`)으로 받은 패키지의 `unsafeFlags`를 허용하지 않아서, 지금은 로컬 경로 패키지로만 쓸 수 있어요. P3 배포 단계에서 해결해야 해요.
+
 ## 14. 참고 자료
 
 - PopPang-RN 빌드 파이프라인: `PopPang-RN/react_native_prebuild/`, `PopPang-RN/react_native_android_prebuild/`, `PopPang-RN/scripts/release-rn.sh`
