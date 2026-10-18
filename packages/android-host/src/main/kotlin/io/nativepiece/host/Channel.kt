@@ -10,6 +10,9 @@ class NativepieceCallError(val code: String, override val message: String) : Exc
 
 /** RN이 보낸 JSON payload예요. */
 class NativepiecePayload internal constructor(private val value: Any?) {
+    internal val raw: Any?
+        get() = value
+
     /** JSON 문자열로 받아요. payload가 없으면 null이에요. */
     val json: String?
         get() = value?.let { if (it == JSONObject.NULL) null else JSONObject.wrap(it).toString() }

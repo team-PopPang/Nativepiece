@@ -7,6 +7,7 @@ import { LINKAGE_PROJECT, prepareAndroidWorkspace, type AndroidWorkspace } from 
 import { run } from '../utils/exec.js';
 import { log } from '../utils/log.js';
 import { BUNDLE_FILE_NAME, bundle } from './bundle.js';
+import { generateSources } from '../codegen/index.js';
 
 const JDK_CANDIDATES = [
   '/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home',
@@ -98,10 +99,13 @@ export async function buildAndroid(config: ResolvedConfig, project: RNProject): 
   if (!config.android) throw new Error('nativepiece.config.ts에 android 설정(group)이 필요해요.');
   const javaHome = await resolveJavaHome();
 
+  // 계약 오류는 오래 걸리는 네이티브 빌드 전에 알린다.
+  log.step('계약 코드 생성');
+  const generated = generateSources(config);
   const jsBundle = await bundle(config, project, 'android');
 
   log.step('Android 작업 공간 준비');
-  const workspace = await prepareAndroidWorkspace(config, project);
+  const workspace = await prepareAndroidWorkspace(config, project, generated);
   await copyBundle(workspace, jsBundle.dir);
 
   await collectLinkageLibraries(workspace, javaHome, config.android.abis);

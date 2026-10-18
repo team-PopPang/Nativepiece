@@ -14,6 +14,7 @@ import java.util.UUID
 class NativepieceFragment : Fragment(), DefaultHardwareBackBtnHandler {
     private var surface: ReactSurface? = null
     private val handlers = mutableMapOf<String, (NativepiecePayload) -> Unit>()
+    private val anyEventHandlers = mutableListOf<(String, NativepiecePayload) -> Unit>()
 
     /** RN 화면이 닫기를 요청했을 때 실행해요. 지정하지 않으면 back stack을 pop하거나 Activity를 종료해요. */
     var onClose: (() -> Unit)? = null
@@ -74,6 +75,11 @@ class NativepieceFragment : Fragment(), DefaultHardwareBackBtnHandler {
         handlers[name] = handler
     }
 
+    /** 모든 이벤트를 받아요. 생성된 `onEvent` 확장 함수가 이 API를 써요. */
+    fun onAnyEvent(handler: (name: String, payload: NativepiecePayload) -> Unit) {
+        anyEventHandlers += handler
+    }
+
     /** 이 화면에만 메시지를 보내요. [payload]는 Map, List, 기본 타입, JSONObject 중 하나예요. */
     @JvmOverloads
     fun send(name: String, payload: Any? = null) {
@@ -93,6 +99,7 @@ class NativepieceFragment : Fragment(), DefaultHardwareBackBtnHandler {
             return
         }
         handlers[name]?.invoke(payload)
+        anyEventHandlers.forEach { it(name, payload) }
     }
 
     private fun close() {
@@ -112,6 +119,10 @@ class NativepieceFragment : Fragment(), DefaultHardwareBackBtnHandler {
         private const val ARG_PROPS = "io.nativepiece.props"
         private const val ARG_SURFACE_ID = "io.nativepiece.surfaceId"
         private const val INTERNAL_PROP = "__nativepiece"
+
+        @JvmStatic
+        fun newInstance(screen: NativepieceScreenRepresentable): NativepieceFragment =
+            newInstance(screen.screenName, NativepieceJson.toBundle(screen.screenProps()))
 
         @JvmStatic
         @JvmOverloads

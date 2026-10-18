@@ -12,6 +12,7 @@ import { run } from '../utils/exec.js';
 import { Fingerprint } from '../utils/fingerprint.js';
 import { log } from '../utils/log.js';
 import { bundle } from './bundle.js';
+import { generateSources } from '../codegen/index.js';
 
 export interface BuildIOSOptions {
   force?: boolean;
@@ -118,6 +119,9 @@ async function installPodsIfNeeded(config: ResolvedConfig, project: RNProject, w
 }
 
 export async function buildIOS(config: ResolvedConfig, project: RNProject, options: BuildIOSOptions = {}): Promise<string> {
+  // 계약 오류는 오래 걸리는 네이티브 빌드 전에 알린다.
+  log.step('계약 코드 생성');
+  const generated = generateSources(config);
   const jsBundle = await bundle(config, project, 'ios');
 
   log.step('iOS 작업 공간 준비');
@@ -135,7 +139,7 @@ export async function buildIOS(config: ResolvedConfig, project: RNProject, optio
 
   log.step('Swift Package 생성');
   const outDir = workspaceDir(project.root, 'output', 'ios', config.name);
-  await assembleSwiftPackage(config, frameworks, jsBundle, outDir);
+  await assembleSwiftPackage(config, frameworks, jsBundle, generated, outDir);
 
   log.success(`Swift Package를 만들었어요: ${outDir}`);
   return outDir;

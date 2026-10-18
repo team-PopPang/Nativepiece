@@ -7,6 +7,7 @@ import { resolveRNProject } from './project.js';
 import { bundle, type Platform } from './commands/bundle.js';
 import { buildIOS } from './commands/build-ios.js';
 import { buildAndroid } from './commands/build-android.js';
+import { generateSources, writeGeneratedSources } from './codegen/index.js';
 import { packagePath } from './utils/assets.js';
 import { log } from './utils/log.js';
 
@@ -43,6 +44,18 @@ program
       const { project, config } = await loadProject(options.projectRoot);
       const output = await bundle(config, project, platform as Platform);
       log.success(`번들을 만들었어요: ${output.bundleFile}`);
+    }),
+  );
+
+program
+  .command('codegen')
+  .description('계약 파일(nativepiece.contract.ts)에서 Swift·Kotlin 코드를 만들어요')
+  .option('--project-root <path>', 'RN 프로젝트 경로', '.')
+  .action(
+    action(async (options: { projectRoot: string }) => {
+      const { config } = await loadProject(options.projectRoot);
+      const outDir = await writeGeneratedSources(config, generateSources(config));
+      log.success(`코드를 만들었어요: ${outDir}`);
     }),
   );
 

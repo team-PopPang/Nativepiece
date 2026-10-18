@@ -14,6 +14,7 @@ open class NativepieceViewController: UIViewController {
 
     private let properties: [String: Any]
     private var handlers: [String: (NativepiecePayload) -> Void] = [:]
+    private var eventSetHandlers: [(String, NativepiecePayload) -> Void] = []
 
     public init(screen: String, properties: [String: Any] = [:]) {
         self.screen = screen
@@ -23,6 +24,10 @@ open class NativepieceViewController: UIViewController {
 
     public convenience init(screen: String, props: some Encodable) throws {
         self.init(screen: screen, properties: try JSONPayload.object(from: props))
+    }
+
+    public convenience init(_ screen: some NativepieceScreenRepresentable) throws {
+        self.init(screen: screen.screenName, properties: try screen.screenProperties())
     }
 
     @available(*, unavailable)
@@ -63,9 +68,25 @@ open class NativepieceViewController: UIViewController {
         }
     }
 
+    /// 계약에서 생성한 이벤트 타입으로 받아요. 예: `controller.on(PopPangRN.Event.self) { event in ... }`
+    public func on<Event: NativepieceEventRepresentable>(_ type: Event.Type, perform handler: @escaping (Event) -> Void) {
+        eventSetHandlers.append { name, payload in
+            do {
+                if let event = try Event(name: name, payload: payload) { handler(event) }
+            } catch {
+                assertionFailure("[Nativepiece] \(name) 이벤트를 \(Event.self)로 디코딩하지 못했어요: \(error)")
+            }
+        }
+    }
+
     /// 이 화면에만 메시지를 보내요.
     public func send(_ name: String, payload: (any Encodable)? = nil) throws {
         try Channel.shared.sendMessage(name, payload: payload, toSurface: surfaceId)
+    }
+
+    /// 계약에서 생성한 메시지 타입으로 이 화면에 보내요.
+    public func send(_ message: some NativepieceMessageRepresentable) throws {
+        try send(message.messageName, payload: message.messagePayload)
     }
 
     private func handle(name: String, payload: NativepiecePayload) {
@@ -74,6 +95,7 @@ open class NativepieceViewController: UIViewController {
             return
         }
         handlers[name]?(payload)
+        eventSetHandlers.forEach { $0(name, payload) }
     }
 
     private func close() {
@@ -93,6 +115,7 @@ public struct NativepieceView: UIViewControllerRepresentable {
     private let properties: [String: Any]
     private var eventHandlers: [String: (NativepiecePayload) -> Void] = [:]
     private var closeHandler: (() -> Void)?
+    private var configure: [(NativepieceViewController) -> Void] = []
 
     public init(screen: String, properties: [String: Any] = [:]) {
         self.screen = screen
@@ -101,6 +124,18 @@ public struct NativepieceView: UIViewControllerRepresentable {
 
     public init(screen: String, props: some Encodable) throws {
         self.init(screen: screen, properties: try JSONPayload.object(from: props))
+    }
+
+    /// 계약에서 생성한 화면 타입으로 열어요. 예: `NativepieceView(PopPangRN.Screen.request(.init(userUuid: id)))`
+    public init(_ screen: some NativepieceScreenRepresentable) {
+        let properties: [String: Any]
+        do {
+            properties = try screen.screenProperties()
+        } catch {
+            assertionFailure("[Nativepiece] \(screen.screenName) 화면 props를 만들지 못했어요: \(error)")
+            properties = [:]
+        }
+        self.init(screen: screen.screenName, properties: properties)
     }
 
     public func onEvent(_ name: String, perform handler: @escaping (NativepiecePayload) -> Void) -> Self {
@@ -119,6 +154,13 @@ public struct NativepieceView: UIViewControllerRepresentable {
         }
     }
 
+    /// 계약에서 생성한 이벤트 타입으로 받아요. 예: `.onEvent(PopPangRN.Event.self) { event in ... }`
+    public func onEvent<Event: NativepieceEventRepresentable>(_ type: Event.Type, perform handler: @escaping (Event) -> Void) -> Self {
+        var copy = self
+        copy.configure.append { $0.on(type, perform: handler) }
+        return copy
+    }
+
     /// RN 화면이 닫기를 요청했을 때 실행해요. SwiftUI에서는 dismiss를 직접 처리해야 해요.
     public func onClose(perform action: @escaping () -> Void) -> Self {
         var copy = self
@@ -129,6 +171,8 @@ public struct NativepieceView: UIViewControllerRepresentable {
     public func makeUIViewController(context: Context) -> NativepieceViewController {
         let controller = NativepieceViewController(screen: screen, properties: properties)
         apply(to: controller)
+        // 타입 이벤트 처리기는 누적되므로 처음 만들 때 한 번만 등록한다.
+        configure.forEach { $0(controller) }
         return controller
     }
 

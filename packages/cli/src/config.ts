@@ -27,6 +27,7 @@ const configSchema = z.object({
   name: identifier,
   version: semver.optional(),
   entry: z.string().default('nativepiece.entry.ts'),
+  contract: z.string().default('nativepiece.contract.ts'),
   bundler: z.enum(['metro']).default('metro'),
   hermes: z
     .object({
@@ -62,6 +63,7 @@ export interface ResolvedConfig {
   name: string;
   version: string;
   entry: string;
+  contract: string;
   bundler: 'metro';
   hermes: { bytecode: boolean };
   ios: {
@@ -121,6 +123,7 @@ export async function loadConfig(projectRoot: string, packageVersion: string): P
     name: config.name,
     version: config.version ?? packageVersion,
     entry: config.entry,
+    contract: config.contract,
     bundler: config.bundler,
     hermes: config.hermes,
     ios: config.ios,

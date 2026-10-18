@@ -6,6 +6,7 @@ import { run } from '../utils/exec.js';
 import type { BundleOutput } from '../commands/bundle.js';
 import type { FrameworksOutput } from './frameworks.js';
 import type { LinkerFlags } from './linker-flags.js';
+import type { GeneratedSources } from '../codegen/index.js';
 
 const KIT_TARGET = 'NativepieceKit';
 const BINARIES_TARGET = 'NativepieceBinaries';
@@ -98,6 +99,7 @@ export async function assembleSwiftPackage(
   config: ResolvedConfig,
   frameworks: FrameworksOutput,
   jsBundle: BundleOutput,
+  generated: GeneratedSources,
   outDir: string,
 ): Promise<string> {
   await rm(outDir, { recursive: true, force: true });
@@ -118,6 +120,7 @@ export async function assembleSwiftPackage(
   const resourcesDir = path.join(moduleDir, 'ReactNative');
   await mkdir(resourcesDir, { recursive: true });
   await writeFile(path.join(moduleDir, `${config.name}.swift`), renderModuleSource(config));
+  if (generated.swift) await writeFile(path.join(moduleDir, `${config.name}Contract.swift`), generated.swift);
   await cp(jsBundle.bundleFile, path.join(resourcesDir, 'main.jsbundle'));
   if ((await readdir(jsBundle.assetsDir)).length > 0) {
     await cp(jsBundle.assetsDir, path.join(resourcesDir, 'assets'), { recursive: true });

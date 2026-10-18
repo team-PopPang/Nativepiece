@@ -8,6 +8,7 @@ import type { RNProject } from '../project.js';
 import { workspaceDir } from '../project.js';
 import { assetPath, packagePath } from '../utils/assets.js';
 import { run } from '../utils/exec.js';
+import type { GeneratedSources } from '../codegen/index.js';
 
 // RN Gradle 플러그인(rootproject)이 앱 모듈 경로를 :app으로 가정하므로 이 이름을 바꾸지 않는다.
 export const LINKAGE_PROJECT = 'app';
@@ -476,7 +477,11 @@ export async function readAutolinkingConfig(project: RNProject, workspace: strin
   return config;
 }
 
-export async function prepareAndroidWorkspace(config: ResolvedConfig, project: RNProject): Promise<AndroidWorkspace> {
+export async function prepareAndroidWorkspace(
+  config: ResolvedConfig,
+  project: RNProject,
+  generated: GeneratedSources,
+): Promise<AndroidWorkspace> {
   if (!config.android) {
     throw new Error('nativepiece.config.ts에 android 설정(group)이 필요해요.');
   }
@@ -513,6 +518,10 @@ export async function prepareAndroidWorkspace(config: ResolvedConfig, project: R
     path.join(sdkDir, 'src', 'generated', 'java', 'io', 'nativepiece', 'host', 'NativepiecePackageList.java'),
     renderPackageList(autolinkingConfig),
   );
+
+  const generatedPackageDir = path.join(sdkDir, 'src', 'generated', 'java', ...generated.kotlinPackage.split('.'));
+  await mkdir(generatedPackageDir, { recursive: true });
+  await writeFile(path.join(generatedPackageDir, `${config.name}.kt`), generated.kotlin);
 
   return { dir, sdkDir, repositoryDir, versions, autolinkingConfig };
 }
