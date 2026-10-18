@@ -13,8 +13,8 @@ Pod::Spec.new do |s|
   s.source       = { :git => "https://github.com/team-PopPang/Nativepiece.git", :tag => s.version.to_s }
 
   s.source_files = "ios/**/*.{h,m,mm}"
-  # Swift 호스트 SDK가 import하는 헤더는 C++을 포함하지 않는 NPEventRouter.h 하나뿐이다.
-  s.public_header_files = "ios/NPEventRouter.h"
+  # Swift 호스트 SDK가 import하는 헤더는 C++을 포함하지 않는 NPChannel.h 하나뿐이다.
+  s.public_header_files = "ios/NPChannel.h"
 
   s.pod_target_xcconfig = { "DEFINES_MODULE" => "YES" }
 

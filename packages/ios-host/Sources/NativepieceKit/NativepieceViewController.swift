@@ -1,6 +1,5 @@
 import SwiftUI
 import UIKit
-internal import NativepieceRuntime
 
 /// RN 화면 하나를 보여 주는 view controller예요.
 open class NativepieceViewController: UIViewController {
@@ -14,7 +13,7 @@ open class NativepieceViewController: UIViewController {
     public var onClose: (() -> Void)?
 
     private let properties: [String: Any]
-    private var handlers: [String: (String?) -> Void] = [:]
+    private var handlers: [String: (NativepiecePayload) -> Void] = [:]
 
     public init(screen: String, properties: [String: Any] = [:]) {
         self.screen = screen
@@ -32,12 +31,15 @@ open class NativepieceViewController: UIViewController {
     }
 
     deinit {
-        NPEventRouter.setHandler(nil, forSurface: surfaceId)
+        let surfaceId = surfaceId
+        Task { @MainActor in
+            Channel.shared.setEventHandler(nil, forSurface: surfaceId)
+        }
     }
 
     override open func loadView() {
-        NPEventRouter.setHandler({ [weak self] name, payloadJson in
-            self?.handle(name: name, payloadJson: payloadJson)
+        Channel.shared.setEventHandler({ [weak self] name, payload in
+            self?.handle(name: name, payload: payload)
         }, forSurface: surfaceId)
 
         var initialProperties = properties
@@ -45,30 +47,33 @@ open class NativepieceViewController: UIViewController {
         view = Nativepiece.shared.makeRootView(moduleName: screen, properties: initialProperties)
     }
 
-    /// RN 화면이 보낸 이벤트를 받아요. payload는 JSON 문자열이에요.
-    public func on(_ name: String, perform handler: @escaping (String?) -> Void) {
+    /// RN 화면이 보낸 이벤트를 받아요.
+    public func on(_ name: String, perform handler: @escaping (NativepiecePayload) -> Void) {
         handlers[name] = handler
     }
 
     /// RN 화면이 보낸 이벤트를 타입으로 받아요. 디코딩에 실패한 이벤트는 무시해요.
     public func on<Payload: Decodable>(_ name: String, as type: Payload.Type, perform handler: @escaping (Payload) -> Void) {
-        handlers[name] = { json in
-            guard let payload = try? JSONPayload.decode(Payload.self, from: json) else { return }
-            handler(payload)
+        handlers[name] = { payload in
+            guard let value = try? payload.decode(Payload.self) else {
+                assertionFailure("[Nativepiece] \(name) 이벤트를 \(Payload.self)로 디코딩하지 못했어요: \(payload.json ?? "nil")")
+                return
+            }
+            handler(value)
         }
     }
 
     /// 이 화면에만 메시지를 보내요.
     public func send(_ name: String, payload: (any Encodable)? = nil) throws {
-        NPEventRouter.sendMessage(name, payloadJson: try JSONPayload.encode(payload), toSurface: surfaceId)
+        try Channel.shared.sendMessage(name, payload: payload, toSurface: surfaceId)
     }
 
-    private func handle(name: String, payloadJson: String?) {
+    private func handle(name: String, payload: NativepiecePayload) {
         if name == Self.closeEvent {
             close()
             return
         }
-        handlers[name]?(payloadJson)
+        handlers[name]?(payload)
     }
 
     private func close() {
@@ -86,7 +91,7 @@ open class NativepieceViewController: UIViewController {
 public struct NativepieceView: UIViewControllerRepresentable {
     private let screen: String
     private let properties: [String: Any]
-    private var eventHandlers: [String: (String?) -> Void] = [:]
+    private var eventHandlers: [String: (NativepiecePayload) -> Void] = [:]
     private var closeHandler: (() -> Void)?
 
     public init(screen: String, properties: [String: Any] = [:]) {
@@ -98,16 +103,19 @@ public struct NativepieceView: UIViewControllerRepresentable {
         self.init(screen: screen, properties: try JSONPayload.object(from: props))
     }
 
-    public func onEvent(_ name: String, perform handler: @escaping (String?) -> Void) -> Self {
+    public func onEvent(_ name: String, perform handler: @escaping (NativepiecePayload) -> Void) -> Self {
         var copy = self
         copy.eventHandlers[name] = handler
         return copy
     }
 
     public func onEvent<Payload: Decodable>(_ name: String, as type: Payload.Type, perform handler: @escaping (Payload) -> Void) -> Self {
-        onEvent(name) { json in
-            guard let payload = try? JSONPayload.decode(Payload.self, from: json) else { return }
-            handler(payload)
+        onEvent(name) { payload in
+            guard let value = try? payload.decode(Payload.self) else {
+                assertionFailure("[Nativepiece] \(name) 이벤트를 \(Payload.self)로 디코딩하지 못했어요: \(payload.json ?? "nil")")
+                return
+            }
+            handler(value)
         }
     }
 

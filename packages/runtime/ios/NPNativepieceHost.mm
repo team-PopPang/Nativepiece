@@ -1,8 +1,8 @@
 #import "NPNativepieceHost.h"
-#import "NPEventRouter+Internal.h"
+#import "NPChannel+Internal.h"
 
 @implementation NPNativepieceHost {
-  NPMessageSink _sink;
+  NPEnvelopeHandler _sink;
 }
 
 RCT_EXPORT_MODULE(NativepieceHost)
@@ -11,12 +11,8 @@ RCT_EXPORT_MODULE(NativepieceHost)
 {
   if (self = [super init]) {
     __weak NPNativepieceHost *weakSelf = self;
-    _sink = [^(NSString *surfaceId, NSString *name, NSString *payloadJson) {
-      [weakSelf emitOnHostMessage:@{
-        @"surfaceId" : surfaceId ?: (id)[NSNull null],
-        @"name" : name,
-        @"payloadJson" : payloadJson ?: (id)[NSNull null],
-      }];
+    _sink = [^(NSString *envelopeJson) {
+      [weakSelf emitOnEnvelope:envelopeJson];
     } copy];
   }
   return self;
@@ -26,17 +22,22 @@ RCT_EXPORT_MODULE(NativepieceHost)
 - (void)setEventEmitterCallback:(EventEmitterCallbackWrapper *)eventEmitterCallbackWrapper
 {
   [super setEventEmitterCallback:eventEmitterCallbackWrapper];
-  [NPEventRouter setMessageSink:_sink];
+  [NPChannel setJSSink:_sink];
 }
 
 - (void)invalidate
 {
-  [NPEventRouter clearMessageSink:_sink];
+  [NPChannel clearJSSink:_sink];
 }
 
-- (void)emit:(NSString *)surfaceId name:(NSString *)name payloadJson:(NSString *)payloadJson
+- (void)post:(NSString *)envelopeJson
 {
-  [NPEventRouter dispatchEventFromSurface:surfaceId name:name payloadJson:payloadJson];
+  [NPChannel receiveFromJS:envelopeJson];
+}
+
+- (NSNumber *)protocolVersion
+{
+  return @(NPProtocolVersion);
 }
 
 - (std::shared_ptr<facebook::react::TurboModule>)getTurboModule:(const facebook::react::ObjCTurboModule::InitParams &)params

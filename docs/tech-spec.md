@@ -524,14 +524,40 @@ open class NativepieceActivity : AppCompatActivity()   // 전체 화면이 필�
 
 ### 7.9 메시지 통로와 네비게이션
 
-| 방향 | 경로 |
-|---|---|
-| RN → 앱 | `host.emit(event, payload)` → `NativepieceHost.emit(surfaceId, ...)` → 해당 화면 컨트롤러의 `on` handler |
-| 앱 → RN (화면 하나) | `controller.send(name, payload)` → RN `DeviceEventEmitter`에 `surfaceId` 필터 적용 → `useHostMessage` |
-| 앱 → RN (전체) | `Nativepiece.shared.send(name, payload)` → 모든 화면 |
+라이브러리는 **전달 방식만** 정하고, **무엇을 주고받을지**는 앱이 계약 파일(`nativepiece.contract.ts`)에서 정해요.
 
-- payload는 JSON으로 직렬화할 수 있는 값만 허용해요. Swift는 `Codable`, Kotlin은 kotlinx.serialization으로 변환해요.
-- 이벤트를 화이트리스트로 거르지 않아요. 타입 안전성은 codegen으로 확보해요.
+**라이브러리가 정하는 것: 메시지 종류와 envelope**
+
+| 종류 | 방향 | 용도 | JS API | Swift / Kotlin API |
+|---|---|---|---|---|
+| `event` | RN → 앱 | 완료, 닫기처럼 알리기 | `host.emit(contract.events.x, payload)` | `.onEvent("x")` / `fragment.on("x")` |
+| `message` | 앱 → RN | 앱 상태 변경 알리기 | `useHostMessage(contract.messages.x, fn)` | `send("x", payload)` |
+| `call` | RN → 앱 → RN | 앱만 아는 값 요청하고 응답 받기 | `await host.call(contract.calls.x, req)` | `Nativepiece.shared.handle("x") { req in ... }` / `Nativepiece.handle("x") { payload, reply -> }` |
+
+모든 메시지는 JSON 문자열 envelope 하나로 오가요.
+
+```json
+{ "v": 1, "kind": "call", "id": "3", "surfaceId": "…", "name": "getAccessToken", "payload": { } }
+{ "v": 1, "kind": "result", "id": "3", "ok": false, "error": { "code": "unhandled", "message": "…" } }
+```
+
+- `v`는 프로토콜 버전이에요. JS·Swift·Kotlin이 같은 값을 가지고, 다르면 시작할 때 오류를 보고해요.
+- `call`은 `id`로 요청과 응답을 연결해요. 기본 타임아웃은 10초이고, 앱에 처리기가 없으면 `unhandled`, 처리기가 실패하면 `failed` 또는 앱이 정한 `code`로 응답해요.
+- 화면이 아직 구독하지 않은 `message`는 화면별로 최대 50개까지 JS에서 보관했다가 구독할 때 전달해요. 네이티브 쪽은 JS가 준비되기 전 envelope을 최대 200개까지 보관해요.
+- 네이티브 모듈(ObjC `NPChannel`, Kotlin `NativepieceChannel`)은 envelope 문자열만 전달하고, 해석과 라우팅은 호스트 SDK가 맡아요.
+
+**앱이 정하는 것: 계약**
+
+```ts
+export default defineContract({
+  screens:  { request: screen<{ userUuid: string }>() },
+  events:   { requestSubmitted: event<{ requestId: string }>() },
+  calls:    { getAccessToken: call<void, { token: string }>() },
+  messages: { userChanged: message<{ userUuid: string }>() },
+});
+```
+
+`nativepiece codegen`은 이 계약에서 Swift 프로토콜과 Kotlin 인터페이스를 만들어요(7.4.2). 생성된 코드를 쓰지 않을 때는 위 표의 문자열 기반 API를 그대로 쓸 수 있어요.
 
 **표준 네비게이션 이벤트**
 

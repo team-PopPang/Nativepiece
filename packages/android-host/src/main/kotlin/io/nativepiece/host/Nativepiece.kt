@@ -6,8 +6,6 @@ import com.facebook.react.defaults.DefaultNewArchitectureEntryPoint
 import com.facebook.react.defaults.DefaultReactHost
 import com.facebook.react.soloader.OpenSourceMergedSoMapping
 import com.facebook.soloader.SoLoader
-import io.nativepiece.runtime.NativepieceEventRouter
-import org.json.JSONObject
 
 /**
  * 앱 전체가 함께 쓰는 React Native 런타임이에요.
@@ -29,6 +27,7 @@ object Nativepiece {
     fun init(application: Application, prewarm: Boolean = true) {
         if (host != null) return
 
+        Channel.install()
         SoLoader.init(application, OpenSourceMergedSoMapping)
         DefaultNewArchitectureEntryPoint.load()
 
@@ -42,10 +41,22 @@ object Nativepiece {
         if (prewarm) reactHost.start()
     }
 
-    /** 모든 화면에 메시지를 보내요. [payload]는 JSON으로 바꿀 수 있는 값이어야 해요. */
+    /** 모든 화면에 메시지를 보내요. [payload]는 Map, List, 기본 타입, JSONObject 중 하나예요. */
     @JvmStatic
     @JvmOverloads
-    fun send(name: String, payload: Map<String, Any?>? = null) {
-        NativepieceEventRouter.sendMessage(name, payload?.let { JSONObject(it).toString() }, null)
+    fun send(name: String, payload: Any? = null) {
+        Channel.sendMessage(name, payload, null)
+    }
+
+    /** RN의 `host.call(name, ...)` 요청을 처리해요. [NativepieceReply]로 응답해요. */
+    @JvmStatic
+    fun handle(name: String, handler: NativepieceCallHandler) {
+        Channel.setCallHandler(name, handler)
+    }
+
+    /** 등록한 `call` 처리기를 지워요. */
+    @JvmStatic
+    fun removeHandler(name: String) {
+        Channel.setCallHandler(name, null)
     }
 }

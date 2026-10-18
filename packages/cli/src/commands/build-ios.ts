@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import type { ResolvedConfig } from '../config.js';
@@ -39,20 +39,57 @@ function podFingerprint(config: ResolvedConfig, project: RNProject, workspace: I
     .file(path.join(project.root, 'react-native.config.js'))
     .file(path.join(project.reactNativePath, 'package.json'));
   for (const lockfile of LOCKFILES) fingerprint.file(path.join(project.root, lockfile));
+  for (const directory of localPodDirectories(workspace, project)) hashNativeSources(fingerprint, directory, false);
   return fingerprint.digest();
 }
 
+const NATIVE_SOURCE_EXTENSIONS = new Set(['.h', '.hpp', '.m', '.mm', '.c', '.cc', '.cpp', '.swift', '.podspec']);
+const IGNORED_DIRECTORIES = new Set(['node_modules', 'android', 'example', 'examples', '.git', 'build']);
+
+// Podfile.lock의 로컬 경로 Pod 중 react-native 밖에 있는 것을 찾는다.
+// 이런 Pod은 버전이 같아도 소스가 바뀔 수 있어서(file: 의존성, patch-package 등) 소스를 직접 해시한다.
+function localPodDirectories(workspace: IOSWorkspace, project: RNProject): string[] {
+  const lockfile = path.join(workspace.dir, 'Podfile.lock');
+  if (!existsSync(lockfile)) return [];
+  const content = readFileSync(lockfile, 'utf8');
+  const external = content.slice(content.indexOf('EXTERNAL SOURCES:'), content.indexOf('SPEC CHECKSUMS:'));
+  const directories = new Set<string>();
+  for (const match of external.matchAll(/:path: "([^"]+)"/g)) {
+    const directory = path.resolve(workspace.dir, match[1]);
+    if (directory === project.reactNativePath || directory.startsWith(`${project.reactNativePath}${path.sep}`)) continue;
+    directories.add(directory);
+  }
+  return [...directories].sort();
+}
+
+// contents가 false면 파일 목록만 해시한다. 파일이 추가·삭제되면 Pods 프로젝트를 다시 만들어야 한다.
+function hashNativeSources(fingerprint: Fingerprint, directory: string, contents = true) {
+  const walk = (current: string) => {
+    for (const entry of readdirSync(current, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
+      const fullPath = path.join(current, entry.name);
+      if (entry.isDirectory()) {
+        if (!IGNORED_DIRECTORIES.has(entry.name)) walk(fullPath);
+      } else if (NATIVE_SOURCE_EXTENSIONS.has(path.extname(entry.name))) {
+        if (contents) fingerprint.file(fullPath);
+        else fingerprint.value('path', fullPath);
+      }
+    }
+  };
+  if (existsSync(directory)) walk(directory);
+}
+
 // 네이티브 XCFramework 결과에 영향을 주는 입력이다. JS만 바뀌면 이 값이 같아서 archive를 건너뛴다.
-async function frameworksFingerprint(config: ResolvedConfig, workspace: IOSWorkspace): Promise<string> {
+async function frameworksFingerprint(config: ResolvedConfig, project: RNProject, workspace: IOSWorkspace): Promise<string> {
   const xcodeVersion = await run('xcodebuild', ['-version'], { inherit: false });
-  return new Fingerprint('nativepiece-ios-frameworks-v1')
+  const fingerprint = new Fingerprint('nativepiece-ios-frameworks-v2')
     .value('cli', cliVersion())
     .value('xcode', xcodeVersion)
     .value('deploymentTarget', config.ios.deploymentTarget)
     .value('prebuilts', config.ios.useRNPrebuilts)
     .value('stripSimulatorDebugSymbols', config.ios.stripSimulatorDebugSymbols)
-    .file(path.join(workspace.dir, 'Podfile.lock'))
-    .digest();
+    .file(path.join(workspace.dir, 'Podfile.lock'));
+  for (const directory of localPodDirectories(workspace, project)) hashNativeSources(fingerprint, directory);
+  return fingerprint.digest();
 }
 
 async function installPodsIfNeeded(config: ResolvedConfig, project: RNProject, workspace: IOSWorkspace, force: boolean) {
@@ -87,7 +124,7 @@ export async function buildIOS(config: ResolvedConfig, project: RNProject, optio
   const workspace = await prepareIOSWorkspace(config, project);
   await installPodsIfNeeded(config, project, workspace, Boolean(options.forcePodInstall));
 
-  const fingerprint = await frameworksFingerprint(config, workspace);
+  const fingerprint = await frameworksFingerprint(config, project, workspace);
   const cacheDir = path.join(workspace.dir, 'build', 'frameworks', fingerprint);
   let frameworks = options.force ? null : await loadCachedFrameworks(cacheDir);
   if (frameworks) {

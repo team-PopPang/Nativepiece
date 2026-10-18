@@ -1,51 +1,58 @@
 import { createContext, useContext, useEffect, useMemo, useRef, type ComponentType } from 'react';
 import { AppRegistry } from 'react-native';
-import NativepieceHost, { type HostMessage } from './specs/NativeNativepieceHost';
+import type {
+  CallContract,
+  CallRequest,
+  CallResponse,
+  ContractDefinition,
+  EventContract,
+  EventPayload,
+  MessageContract,
+  MessagePayload,
+  ScreenProps,
+} from './contract';
+import { getChannel } from './protocol';
+
+export * from './contract';
+export { NativepieceCallError, PROTOCOL_VERSION } from './protocol';
 
 // 네이티브가 initialProperties에 넣어 주는 내부 값의 key다. 화면 props와 겹치지 않게 접두사를 붙인다.
 const INTERNAL_PROP = '__nativepiece';
+const DEFAULT_CALL_TIMEOUT_MS = 10_000;
 
 export const NAVIGATION_EVENT = {
   close: 'np.close',
 } as const;
 
-export interface EventDefinition<Payload> {
-  readonly name: string;
-  // 타입 추론에만 쓰는 값이다. 런타임에는 존재하지 않는다.
-  readonly __payload?: Payload;
+type PayloadArgs<Payload> = [Payload] extends [void] ? [] : [Payload];
+
+export interface CallOptions {
+  timeoutMs?: number;
 }
 
-export function defineEvent<Payload = void>(name: string): EventDefinition<Payload> {
-  if (name.startsWith('np.')) {
-    throw new Error(`"np."로 시작하는 이벤트 이름은 Nativepiece가 예약했어요: ${name}`);
-  }
-  return { name };
-}
-
-export interface ScreenDefinition<Props> {
-  component: ComponentType<Props>;
-}
-
-export function defineScreen<Props extends object>(component: ComponentType<Props>): ScreenDefinition<Props> {
-  return { component };
-}
-
-type MessageListener = (payload: unknown) => void;
-
-interface HostContextValue {
-  surfaceId: string;
-  emit<Payload>(event: EventDefinition<Payload>, ...payload: Payload extends void ? [] : [Payload]): void;
+export interface Host {
+  readonly surfaceId: string;
+  emit<E extends EventContract<any>>(event: E, ...payload: PayloadArgs<EventPayload<E>>): void;
+  call<C extends CallContract<any, any>>(
+    call: C,
+    ...args: [...PayloadArgs<CallRequest<C>>, CallOptions?]
+  ): Promise<CallResponse<C>>;
   close(): void;
 }
 
-const HostContext = createContext<HostContextValue | null>(null);
+const HostContext = createContext<Host | null>(null);
 
-function serialize(payload: unknown): string | null {
-  return payload === undefined ? null : JSON.stringify(payload);
-}
-
-function emitRaw(surfaceId: string, name: string, payload: unknown) {
-  NativepieceHost.emit(surfaceId, name, serialize(payload));
+function createHost(surfaceId: string): Host {
+  const channel = getChannel();
+  return {
+    surfaceId,
+    emit: (event, ...payload) => channel.emit(surfaceId, event.name, payload[0]),
+    call: ((call: CallContract<any, any>, ...args: unknown[]) => {
+      const options = (args.length > 1 ? args[1] : undefined) as CallOptions | undefined;
+      return channel.call(surfaceId, call.name, args[0], options?.timeoutMs ?? DEFAULT_CALL_TIMEOUT_MS);
+    }) as Host['call'],
+    close: () => channel.emit(surfaceId, NAVIGATION_EVENT.close, undefined),
+  };
 }
 
 // 화면 컴포넌트를 감싸 surfaceId를 꺼내고, 호스트와 통신하는 context를 제공한다.
@@ -53,18 +60,12 @@ function withHost<Props extends object>(screenKey: string, Screen: ComponentType
   function NativepieceScreenRoot(props: Props & { [INTERNAL_PROP]?: { surfaceId?: string } }) {
     const { [INTERNAL_PROP]: internal, ...screenProps } = props;
     const surfaceId = internal?.surfaceId ?? screenKey;
+    const host = useMemo(() => createHost(surfaceId), [surfaceId]);
 
-    const value = useMemo<HostContextValue>(
-      () => ({
-        surfaceId,
-        emit: (event, ...payload) => emitRaw(surfaceId, event.name, payload[0]),
-        close: () => emitRaw(surfaceId, NAVIGATION_EVENT.close, undefined),
-      }),
-      [surfaceId],
-    );
+    useEffect(() => () => getChannel().dropSurface(surfaceId), [surfaceId]);
 
     return (
-      <HostContext.Provider value={value}>
+      <HostContext.Provider value={host}>
         <Screen {...(screenProps as Props)} />
       </HostContext.Provider>
     );
@@ -73,23 +74,25 @@ function withHost<Props extends object>(screenKey: string, Screen: ComponentType
   return NativepieceScreenRoot;
 }
 
-export interface ModuleDefinition<Screens extends Record<string, ScreenDefinition<any>>> {
-  screens: Screens;
-  events?: Record<string, EventDefinition<any>>;
-}
+export type ScreenComponents<Contract extends ContractDefinition> = {
+  [Key in keyof Contract['screens']]: ComponentType<ScreenProps<Contract['screens'][Key]>>;
+};
 
-// 화면마다 AppRegistry에 등록한다. 네이티브는 screen key를 moduleName으로 써서 화면을 연다.
-export function defineModule<Screens extends Record<string, ScreenDefinition<any>>>(
-  definition: ModuleDefinition<Screens>,
-): ModuleDefinition<Screens> {
-  for (const [screenKey, screen] of Object.entries(definition.screens)) {
-    const Root = withHost(screenKey, screen.component);
-    AppRegistry.registerComponent(screenKey, () => Root);
+// 계약의 화면마다 컴포넌트를 AppRegistry에 등록한다. 네이티브는 화면 이름을 moduleName으로 써서 화면을 연다.
+export function defineModule<Contract extends ContractDefinition>(
+  contract: Contract,
+  screens: ScreenComponents<Contract>,
+): Contract {
+  for (const [key, definition] of Object.entries(contract.screens)) {
+    const component = (screens as Record<string, ComponentType<any>>)[key];
+    if (!component) throw new Error(`화면 컴포넌트가 없어요: ${key}`);
+    const Root = withHost(definition.name, component);
+    AppRegistry.registerComponent(definition.name, () => Root);
   }
-  return definition;
+  return contract;
 }
 
-export function useHost(): HostContextValue {
+export function useHost(): Host {
   const host = useContext(HostContext);
   if (!host) {
     throw new Error('useHost는 defineModule로 등록한 화면 안에서만 쓸 수 있어요.');
@@ -97,18 +100,17 @@ export function useHost(): HostContextValue {
   return host;
 }
 
-// 앱이 보낸 메시지를 받는다. 이 화면에 보낸 메시지와 모든 화면에 보낸 메시지를 함께 받는다.
-export function useHostMessage<Payload = unknown>(name: string, listener: (payload: Payload) => void): void {
+/** 호스트가 보낸 메시지를 받아요. 이 화면에 보낸 메시지와 모든 화면에 보낸 메시지를 함께 받아요. */
+export function useHostMessage<M extends MessageContract<any>>(
+  message: M,
+  listener: (payload: MessagePayload<M>) => void,
+): void {
   const { surfaceId } = useHost();
-  const listenerRef = useRef<MessageListener>(listener as MessageListener);
-  listenerRef.current = listener as MessageListener;
+  const listenerRef = useRef(listener);
+  listenerRef.current = listener;
 
-  useEffect(() => {
-    const subscription = NativepieceHost.onHostMessage((message: HostMessage) => {
-      if (message.name !== name) return;
-      if (message.surfaceId !== null && message.surfaceId !== surfaceId) return;
-      listenerRef.current(message.payloadJson === null ? undefined : JSON.parse(message.payloadJson));
-    });
-    return () => subscription.remove();
-  }, [name, surfaceId]);
+  useEffect(
+    () => getChannel().subscribe(surfaceId, message.name, (payload) => listenerRef.current(payload as MessagePayload<M>)),
+    [message.name, surfaceId],
+  );
 }

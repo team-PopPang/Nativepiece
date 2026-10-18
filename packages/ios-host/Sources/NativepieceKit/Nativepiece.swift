@@ -1,6 +1,5 @@
 import Foundation
 import UIKit
-internal import NativepieceRuntime
 internal import React
 internal import React_RCTAppDelegate
 internal import ReactAppDependencyProvider
@@ -40,6 +39,7 @@ public final class Nativepiece {
     /// 런타임을 만들어요. `prewarm`이 true면 화면을 열기 전에 JS 번들을 미리 불러와요.
     @MainActor
     public func start(prewarm: Bool = true) {
+        _ = Channel.shared
         let factory = makeFactoryIfNeeded()
         guard prewarm else { return }
         initializeReactHost(of: factory)
@@ -61,8 +61,38 @@ public final class Nativepiece {
     }
 
     /// 모든 화면에 메시지를 보내요.
+    @MainActor
     public func send(_ name: String, payload: (any Encodable)? = nil) throws {
-        NPEventRouter.sendMessage(name, payloadJson: try JSONPayload.encode(payload), toSurface: nil)
+        try Channel.shared.sendMessage(name, payload: payload, toSurface: nil)
+    }
+
+    /// RN의 `host.call(name, ...)` 요청을 처리해요. 반환값이 RN에 응답으로 전달돼요.
+    ///
+    /// `NativepieceCallError`를 던지면 RN에서 같은 code의 오류로 받아요.
+    @MainActor
+    public func handle<Request: Decodable, Response: Encodable>(
+        _ name: String,
+        request: Request.Type = Request.self,
+        perform handler: @escaping @MainActor (Request) async throws -> Response
+    ) {
+        Channel.shared.setCallHandler({ payload, _ in
+            try await handler(try payload.decode(Request.self))
+        }, for: name)
+    }
+
+    /// 요청 값이 없는 `call`을 처리해요.
+    @MainActor
+    public func handle<Response: Encodable>(
+        _ name: String,
+        perform handler: @escaping @MainActor () async throws -> Response
+    ) {
+        Channel.shared.setCallHandler({ _, _ in try await handler() }, for: name)
+    }
+
+    /// 등록한 `call` 처리기를 지워요.
+    @MainActor
+    public func removeHandler(_ name: String) {
+        Channel.shared.setCallHandler(nil, for: name)
     }
 
     @MainActor
@@ -94,16 +124,6 @@ public final class Nativepiece {
 }
 
 enum JSONPayload {
-    static func encode(_ payload: (any Encodable)?) throws -> String? {
-        guard let payload else { return nil }
-        let data = try JSONEncoder().encode(payload)
-        return String(decoding: data, as: UTF8.self)
-    }
-
-    static func decode<T: Decodable>(_ type: T.Type, from json: String?) throws -> T {
-        try JSONDecoder().decode(T.self, from: Data((json ?? "null").utf8))
-    }
-
     static func object(from payload: some Encodable) throws -> [String: Any] {
         let data = try JSONEncoder().encode(payload)
         guard let object = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {

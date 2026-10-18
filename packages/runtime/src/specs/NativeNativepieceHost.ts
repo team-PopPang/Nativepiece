@@ -1,16 +1,11 @@
 import type { CodegenTypes, TurboModule } from 'react-native';
 import { TurboModuleRegistry } from 'react-native';
 
-export type HostMessage = {
-  // null이면 모든 화면에 보내는 메시지다.
-  surfaceId: string | null;
-  name: string;
-  payloadJson: string | null;
-};
-
+// 네이티브와 주고받는 값은 모두 JSON 문자열로 된 envelope 하나다. 형식은 protocol.ts에 정의한다.
 export interface Spec extends TurboModule {
-  emit(surfaceId: string, name: string, payloadJson: string | null): void;
-  readonly onHostMessage: CodegenTypes.EventEmitter<HostMessage>;
+  post(envelopeJson: string): void;
+  protocolVersion(): number;
+  readonly onEnvelope: CodegenTypes.EventEmitter<string>;
 }
 
 export default TurboModuleRegistry.getEnforcing<Spec>('NativepieceHost');
