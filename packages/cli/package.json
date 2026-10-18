@@ -1,0 +1,39 @@
+{
+  "name": "@nativepiece/cli",
+  "version": "0.1.0",
+  "description": "Build a React Native app into a Swift Package and an Android AAR",
+  "type": "module",
+  "bin": {
+    "nativepiece": "./dist/bin.js"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "assets"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json && node scripts/copy-hosts.mjs",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "commander": "^14.0.3",
+    "jiti": "^2.7.0",
+    "picocolors": "^1.1.1",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.5",
+    "typescript": "~5.9.3"
+  },
+  "engines": {
+    "node": ">=22.11.0"
+  }
+}

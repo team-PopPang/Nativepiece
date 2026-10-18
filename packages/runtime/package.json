@@ -1,0 +1,41 @@
+{
+  "name": "@nativepiece/runtime",
+  "version": "0.1.0",
+  "description": "JS runtime and native bridge for Nativepiece modules",
+  "main": "src/index.tsx",
+  "types": "src/index.tsx",
+  "react-native": "src/index.tsx",
+  "source": "src/index.tsx",
+  "files": [
+    "src",
+    "ios",
+    "android/build.gradle",
+    "android/src",
+    "NativepieceRuntime.podspec",
+    "react-native.config.js"
+  ],
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "peerDependencies": {
+    "react": "*",
+    "react-native": ">=0.84.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.0",
+    "typescript": "~5.9.3"
+  },
+  "codegenConfig": {
+    "name": "NativepieceRuntimeSpec",
+    "type": "modules",
+    "jsSrcsDir": "src/specs",
+    "android": {
+      "javaPackageName": "io.nativepiece.runtime"
+    },
+    "ios": {
+      "modulesProvider": {
+        "NativepieceHost": "NPNativepieceHost"
+      }
+    }
+  }
+}
