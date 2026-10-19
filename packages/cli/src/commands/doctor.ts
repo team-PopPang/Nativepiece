@@ -17,7 +17,7 @@ export interface CheckResult {
   detail?: string;
 }
 
-export const MIN_REACT_NATIVE = [0, 84] as const;
+export const MIN_REACT_NATIVE = [0, 85] as const;
 const MIN_NODE = [22, 11] as const;
 
 // prebuilt React Native core와 함께 쓰면 iOS 빌드가 깨지는 것으로 알려진 라이브러리다.

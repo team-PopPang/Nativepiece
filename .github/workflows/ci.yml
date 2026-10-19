@@ -39,7 +39,7 @@ jobs:
       fail-fast: false
       matrix:
         # create-nativepiece의 TESTED_RN_VERSIONS와 맞춰요.
-        rn: ['0.86', '0.88']
+        rn: ['0.85', '0.86', '0.87', '0.88']
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -51,7 +51,7 @@ jobs:
           distribution: temurin
           java-version: 17
       - uses: gradle/actions/setup-gradle@v4
-      # 검증하는 RN 버전(0.86, 0.88)이 요구하는 NDK 버전이에요 (react-native/gradle/libs.versions.toml).
+      # 검증하는 RN 버전(0.85~0.88)이 모두 요구하는 NDK 버전이에요 (react-native/gradle/libs.versions.toml).
       - name: Install NDK
         run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;27.1.12297006" > /dev/null
       - run: npm ci
@@ -79,7 +79,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        rn: ['0.86', '0.88']
+        rn: ['0.85', '0.86', '0.87', '0.88']
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

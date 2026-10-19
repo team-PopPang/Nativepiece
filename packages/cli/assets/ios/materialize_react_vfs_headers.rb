@@ -134,10 +134,8 @@ def mark_react_module_as_system(react_framework_path)
   # React-RCTAppDelegate is a submodule implemented by React.framework, not a
   # separate framework in the prebuilt React binary. Keep its public module in
   # a small static framework shim so SwiftPM can satisfy its auto-link option.
-  content.gsub!(
-    /\nframework module React_RCTAppDelegate \{\n\s*umbrella header "React_RCTAppDelegate\/React_RCTAppDelegate-umbrella\.h"\n\s*export \*\n\}\n*/,
-    "\n"
-  )
+  # RN 버전에 따라 블록 안의 줄(module * { export * } 등)이 달라서, 블록 전체를 지운다.
+  content.gsub!(/\n*framework module React_RCTAppDelegate \{.*?\n\}\n*/m, "\n")
   File.chmod((File.stat(module_map_path).mode & 0o777) | 0o200, module_map_path)
   File.write(module_map_path, content)
 end
