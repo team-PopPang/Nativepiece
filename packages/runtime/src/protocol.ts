@@ -8,7 +8,11 @@ export type Envelope =
   | { v: number; kind: 'call'; id: string; surfaceId: string; name: string; payload?: unknown }
   | { v: number; kind: 'result'; id: string; ok: true; payload?: unknown }
   | { v: number; kind: 'result'; id: string; ok: false; error: { code: string; message: string } }
-  | { v: number; kind: 'message'; surfaceId: string | null; name: string; payload?: unknown };
+  | { v: number; kind: 'message'; surfaceId: string | null; name: string; payload?: unknown }
+  | { v: number; kind: 'lifecycle'; name: LifecycleName; surfaceId?: string };
+
+// 호스트 SDK가 성능 지표를 계산할 때 쓰는 시점이다.
+export type LifecycleName = 'runtimeReady' | 'surfaceMounted' | 'surfaceReady';
 
 export class NativepieceCallError extends Error {
   constructor(
@@ -50,6 +54,10 @@ class Channel {
 
   emit(surfaceId: string, name: string, payload: unknown) {
     this.post({ v: PROTOCOL_VERSION, kind: 'event', surfaceId, name, payload });
+  }
+
+  lifecycle(name: LifecycleName, surfaceId?: string) {
+    this.post({ v: PROTOCOL_VERSION, kind: 'lifecycle', name, surfaceId });
   }
 
   call(surfaceId: string, name: string, payload: unknown, timeoutMs: number): Promise<unknown> {

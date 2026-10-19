@@ -48,6 +48,7 @@ object Nativepiece {
         }
 
         Channel.install()
+        MetricsTracker.runtimeStarted(prewarm)
         SoLoader.init(application, OpenSourceMergedSoMapping)
         DefaultNewArchitectureEntryPoint.load()
 
@@ -73,6 +74,12 @@ object Nativepiece {
     @JvmStatic
     fun handle(name: String, handler: NativepieceCallHandler) {
         Channel.setCallHandler(name, handler)
+    }
+
+    /** 성능 지표를 받아요. 분석 도구로 보내거나 로그로 남길 때 써요. */
+    @JvmStatic
+    fun onMetric(handler: NativepieceMetricHandler?) {
+        MetricsTracker.handler = handler
     }
 
     /** 등록한 `call` 처리기를 지워요. */

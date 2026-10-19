@@ -40,6 +40,7 @@ public final class Nativepiece {
     @MainActor
     public func start(prewarm: Bool = true) {
         _ = Channel.shared
+        MetricsTracker.shared.runtimeStarted(prewarm: prewarm)
         let factory = makeFactoryIfNeeded()
         guard prewarm else { return }
         initializeReactHost(of: factory)

@@ -91,6 +91,8 @@ final class Channel {
         let surfaceId = object["surfaceId"] as? String ?? ""
 
         switch kind {
+        case "lifecycle":
+            MetricsTracker.shared.lifecycle(name, surfaceId: object["surfaceId"] as? String)
         case "event":
             surfaceHandlers[surfaceId]?(name, payload)
         case "call":
