@@ -54,8 +54,56 @@ PopPang-RN을 Nativepiece로 빌드해서 RN 화면을 열 때까지 걸리는 �
 - runtime이 준비된 뒤 열어도 첫 진입이 재진입보다 길어요(Android 74ms 대 21ms). 화면 컴포넌트를 처음 그릴 때 드는 초기화 비용이에요. 테크 스펙의 `prerender`(화면 미리 그리기)로 줄일 수 있는 부분이라 다음 단계 후보로 남겨요.
 - "바로 열기"는 실행마다 런타임 준비가 끝났는지 여부가 달라서 cold와 warm이 섞여 있어요.
 
+## 결과물 크기
+
+PopPang-RN v1.0.0 GitHub Release에 올라간 결과물과, 같은 PopPang-RN 코드를 Nativepiece로 빌드한 결과물을 비교했어요. 압축은 기존과 같은 zip(`ditto -c -k`, `zip -r`) 기준이에요.
+
+### 배포 파일 (zip)
+
+| 결과물 | 기존 PopPang-RN | Nativepiece | 차이 |
+|---|---|---|---|
+| iOS 패키지 | 63.9MB (`poppang-rn-spm`) + 0.34MB (`poppang-rn-ios-bundle`) | 63.2MB (번들 포함 한 파일) | -1.1MB, 파일 2개 → 1개 |
+| Android 저장소 | 730.7MB (`poppang-rn-android-maven`) + 0.35MB (`poppang-rn-android-bundle`) | 40.6MB (번들, Compose artifact 포함) | **-690MB (-94%)**, 파일 2개 → 1개 |
+| **합계** | **795.3MB** | **103.8MB** | **-87%** |
+
+### 압축을 푼 크기
+
+| 결과물 | 기존 | Nativepiece |
+|---|---|---|
+| iOS Swift Package | 263MB | 267MB |
+| Android Maven 저장소 | 706MB | 40MB |
+
+### Android가 줄어든 이유
+
+| 기존 저장소 구성 | 크기 | Nativepiece |
+|---|---|---|
+| `com/facebook` (react-android, hermes-android 미러링) | 632MB | 넣지 않아요. 호스트 앱이 Maven Central에서 받아요 |
+| `androidx`, `org` 등 기타 미러링 | 13MB | 넣지 않아요. 호스트 앱이 Google·Maven Central에서 받아요 |
+| `com/poppang` SDK AAR (debug 47.5MB + release 26.3MB) | 74MB | debug 25.4MB + release 14.4MB = 40MB. ABI를 4개(armeabi-v7a, arm64-v8a, x86, x86_64)에서 2개(arm64-v8a, x86_64)로 줄였어요 |
+| 네이티브 모듈 AAR 5개 | 1.2MB | 1.2MB (+ nativepiece_runtime 9.5KB) |
+
+- 32비트 기기(armeabi-v7a)를 지원해야 하면 `android.abis`에 추가하면 돼요. 그 경우 SDK AAR은 기존과 비슷한 크기가 돼요.
+- 미러링을 없앤 대신 호스트 앱 빌드 환경에서 Maven Central에 접근할 수 있어야 해요. 사용자 앱(APK) 크기는 미러링 여부와 상관없이 같아요.
+
+### iOS가 거의 그대로인 이유
+
+iOS는 기존에도 prebuilt React Native(React.xcframework 113MB, ReactNativeDependencies 27MB, hermesvm 15MB)를 그대로 담는 구조라 바뀐 게 적어요. 늘어난 4MB는 아래와 같아요.
+
+- `NativepieceRuntime.xcframework` 0.5MB와, 그 TurboModule spec 때문에 커진 `ReactCodegen` 1.6MB
+- Swift Package 안에 들어간 JS 번들과 호스트 SDK 소스 2.2MB
+
+### JS 번들
+
+| | 기존 (일반 JS, minify) | Nativepiece (Hermes 바이트코드) |
+|---|---|---|
+| 크기 | 1.32MB | 1.50MB (+14%) |
+| 첫 진입 (iOS, prewarm 없음) | 122.4ms | 19.4ms |
+
+바이트코드는 일반 JS보다 조금 커요. 대신 실행할 때 파싱과 컴파일을 건너뛰어 첫 진입이 크게 빨라져요.
+
 ## 다음에 잴 것
 
 - 실기기(iPhone, 중급 Android)에서 같은 조건으로 다시 재기
 - `prerender` 구현 뒤 첫 진입 비교
 - PopPang-iOS에 적용한 뒤(로드맵 마지막) 실제 앱에서 예전 방식과 직접 비교
+- 사용자 앱 크기 증가분(App Store 앱 크기 보고서, Android App Bundle의 기기별 APK)
