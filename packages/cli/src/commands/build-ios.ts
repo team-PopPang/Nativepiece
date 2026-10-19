@@ -60,6 +60,8 @@ function localPodDirectories(workspace: IOSWorkspace, project: RNProject): strin
   for (const match of external.matchAll(/:path: "([^"]+)"/g)) {
     const directory = path.resolve(workspace.dir, match[1]);
     if (directory === project.reactNativePath || directory.startsWith(`${project.reactNativePath}${path.sep}`)) continue;
+    // 작업 공간 안의 Pod(ReactCodegen 등)은 codegen이 archive할 때마다 다시 만든다. 입력은 이미 키에 들어가 있으므로 뺀다.
+    if (directory.startsWith(`${workspace.dir}${path.sep}`)) continue;
     directories.add(directory);
   }
   return [...directories].sort();
