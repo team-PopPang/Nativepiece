@@ -141,6 +141,8 @@ async function materializeReactHeaders(workspace: IOSWorkspace, config: Resolved
     path.join(workspace.dir, 'Pods', 'hermes-engine', 'destroot', 'include', 'hermes'),
     outDir,
     config.ios.deploymentTarget,
+    // RN 0.88부터는 VFS 대신 이 폴더에 이름공간별 헤더가 있다.
+    path.join(workspace.dir, 'Pods', 'React-Core-prebuilt', 'Headers'),
   ]);
 }
 

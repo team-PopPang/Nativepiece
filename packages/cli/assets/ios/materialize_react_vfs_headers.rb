@@ -18,7 +18,7 @@ def fail_with(message)
   exit 1
 end
 
-react_xcframework_path, dependencies_xcframework_path, hermes_headers_path, frameworks_dir, minimum_os_version = ARGV
+react_xcframework_path, dependencies_xcframework_path, hermes_headers_path, frameworks_dir, minimum_os_version, prebuilt_headers_path = ARGV
 if [react_xcframework_path, dependencies_xcframework_path, hermes_headers_path, frameworks_dir].any?(&:nil?)
   fail_with(
     "usage: #{File.basename($PROGRAM_NAME)} <React.xcframework> " \
@@ -44,41 +44,58 @@ react_headers_root = File.join(react_xcframework_path, "Headers")
 dependencies_headers_root = File.join(dependencies_xcframework_path, "Headers")
 
 fail_with("React XCFramework not found: #{react_xcframework_path}") unless Dir.exist?(react_xcframework_path)
-fail_with("React VFS template not found: #{template_path}") unless File.file?(template_path)
-fail_with("React shared headers not found: #{react_headers_root}") unless Dir.exist?(react_headers_root)
 fail_with("React Native dependencies headers not found: #{dependencies_headers_root}") unless Dir.exist?(dependencies_headers_root)
 fail_with("Hermes headers not found: #{hermes_headers_path}") unless Dir.exist?(hermes_headers_path)
 fail_with("Swift Package frameworks directory not found: #{frameworks_dir}") unless Dir.exist?(frameworks_dir)
 
-template = YAML.load_file(template_path)
-headers_root = template.fetch("roots").find { |root| root["name"] == "${ROOT_PATH}/Headers" }
-fail_with("React VFS template does not define the Headers root") unless headers_root
-
 mappings = []
-collect_mappings = lambda do |entry, logical_parent|
-  name = entry.fetch("name")
-  fail_with("unsafe VFS path: #{name}") if name.include?("..") || Pathname.new(name).absolute?
 
-  logical_path = logical_parent.empty? ? name : File.join(logical_parent, name)
-  case entry.fetch("type")
-  when "directory"
-    entry.fetch("contents", []).each { |child| collect_mappings.call(child, logical_path) }
-  when "file"
-    source_path = File.expand_path(
-      entry.fetch("external-contents").sub("${ROOT_PATH}", react_xcframework_path)
-    )
-    unless source_path.start_with?("#{react_headers_root}/") && File.file?(source_path)
-      fail_with("VFS source header is unavailable: #{source_path}")
+if File.file?(template_path)
+  # RN 0.86 이하: CocoaPods VFS overlay(React-VFS-template.yaml)가 논리 경로와 실제 헤더를 연결한다.
+  fail_with("React shared headers not found: #{react_headers_root}") unless Dir.exist?(react_headers_root)
+
+  template = YAML.load_file(template_path)
+  headers_root = template.fetch("roots").find { |root| root["name"] == "${ROOT_PATH}/Headers" }
+  fail_with("React VFS template does not define the Headers root") unless headers_root
+
+  collect_mappings = lambda do |entry, logical_parent|
+    name = entry.fetch("name")
+    fail_with("unsafe VFS path: #{name}") if name.include?("..") || Pathname.new(name).absolute?
+
+    logical_path = logical_parent.empty? ? name : File.join(logical_parent, name)
+    case entry.fetch("type")
+    when "directory"
+      entry.fetch("contents", []).each { |child| collect_mappings.call(child, logical_path) }
+    when "file"
+      source_path = File.expand_path(
+        entry.fetch("external-contents").sub("${ROOT_PATH}", react_xcframework_path)
+      )
+      unless source_path.start_with?("#{react_headers_root}/") && File.file?(source_path)
+        fail_with("VFS source header is unavailable: #{source_path}")
+      end
+
+      mappings << [logical_path, source_path]
+    else
+      fail_with("unsupported VFS entry type: #{entry.fetch('type')}")
     end
-
-    mappings << [logical_path, source_path]
-  else
-    fail_with("unsupported VFS entry type: #{entry.fetch('type')}")
   end
+
+  headers_root.fetch("contents", []).each { |entry| collect_mappings.call(entry, "") }
+elsif prebuilt_headers_path && Dir.exist?(prebuilt_headers_path)
+  # RN 0.88 이상: VFS 없이 React-Core-prebuilt/Headers 아래에 이름공간별 실제 헤더가 있다.
+  headers_dir = File.expand_path(prebuilt_headers_path)
+  Dir.glob(File.join(headers_dir, "**", "*")).sort.each do |source_path|
+    next unless File.file?(source_path)
+    logical_path = Pathname.new(source_path).relative_path_from(Pathname.new(headers_dir)).to_s
+    # 이름공간 없이 루트에 있는 파일(module.modulemap 등)은 SwiftPM 소비에 필요 없다.
+    next unless logical_path.include?(File::SEPARATOR)
+    mappings << [logical_path, source_path]
+  end
+else
+  fail_with("React VFS template or prebuilt Headers not found: #{template_path}, #{prebuilt_headers_path}")
 end
 
-headers_root.fetch("contents", []).each { |entry| collect_mappings.call(entry, "") }
-fail_with("React VFS template did not contain header mappings") if mappings.empty?
+fail_with("React header mappings are empty") if mappings.empty?
 
 # 헤더 파일 하나를 목적지에 복사한다.
 # 동일한 파일은 유지하고, 다른 파일만 교체해 불필요한 쓰기를 줄인다.
@@ -95,10 +112,12 @@ end
 def copy_directory_contents(source_directory, destination_directory)
   FileUtils.mkdir_p(destination_directory)
   Dir.children(source_directory).each do |entry|
+    # RN 0.88은 같은 헤더(hermes 등)가 여러 곳에 있고 원본이 읽기 전용이라, 덮어쓰지 않고 지운 뒤 복사한다.
     FileUtils.cp_r(
       File.join(source_directory, entry),
       destination_directory,
-      preserve: true
+      preserve: true,
+      remove_destination: true
     )
   end
 end
@@ -280,7 +299,10 @@ react_framework_headers.each do |destination_headers|
 
   mark_react_module_as_system(File.dirname(destination_headers))
 end
-mark_react_module_as_system(react_xcframework_path)
+# RN 0.86의 React.xcframework는 루트에도 module map을 두지만 0.88부터는 slice 안에만 있다.
+if File.file?(File.join(react_xcframework_path, "Modules", "module.modulemap"))
+  mark_react_module_as_system(react_xcframework_path)
+end
 
 app_delegate_headers = File.join(react_framework_headers.first, "React_RCTAppDelegate")
 fail_with("React RCTAppDelegate headers not found: #{app_delegate_headers}") unless Dir.exist?(app_delegate_headers)

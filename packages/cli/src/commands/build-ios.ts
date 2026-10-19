@@ -7,7 +7,7 @@ import { workspaceDir } from '../project.js';
 import { buildFrameworks, loadCachedFrameworks, type IOSConfiguration } from '../ios/frameworks.js';
 import { assembleSwiftPackage } from '../ios/package.js';
 import { prepareIOSWorkspace, type IOSWorkspace } from '../ios/workspace.js';
-import { packagePath } from '../utils/assets.js';
+import { assetPath, packagePath } from '../utils/assets.js';
 import { run } from '../utils/exec.js';
 import { Fingerprint } from '../utils/fingerprint.js';
 import { log } from '../utils/log.js';
@@ -98,6 +98,8 @@ async function frameworksFingerprint(
     .value('deploymentTarget', config.ios.deploymentTarget)
     .value('prebuilts', config.ios.useRNPrebuilts)
     .value('stripSimulatorDebugSymbols', config.ios.stripSimulatorDebugSymbols)
+    // 개발 중에는 CLI 버전이 같아도 헤더 처리 스크립트가 바뀔 수 있다.
+    .file(assetPath('ios', 'materialize_react_vfs_headers.rb'))
     .file(path.join(workspace.dir, 'Podfile.lock'));
   for (const directory of localPodDirectories(workspace, project)) hashNativeSources(fingerprint, directory);
   return fingerprint.digest();

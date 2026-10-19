@@ -75,8 +75,11 @@ function resolveVersions(config: ResolvedConfig, project: RNProject): AndroidVer
     return value;
   };
   const hermesProperties = readFileSync(path.join(project.reactNativePath, 'sdks', 'hermes-engine', 'version.properties'), 'utf8');
-  const hermes = hermesProperties.match(/^HERMES_V1_VERSION_NAME=(.+)$/m)?.[1]?.trim();
-  if (!hermes) throw new Error('Hermes V1 버전을 찾지 못했어요.');
+  // RN 0.86은 HERMES_V1_VERSION_NAME(Hermes V1)과 HERMES_VERSION_NAME(이전 Hermes)을 함께 두고, 0.88부터는 V1만 HERMES_VERSION_NAME에 둔다.
+  const hermes = (
+    hermesProperties.match(/^HERMES_V1_VERSION_NAME=(.+)$/m)?.[1] ?? hermesProperties.match(/^HERMES_VERSION_NAME=(.+)$/m)?.[1]
+  )?.trim();
+  if (!hermes) throw new Error('Hermes 버전을 찾지 못했어요.');
 
   return {
     minSdk: config.android?.minSdk ?? Number(required('minSdk')),
@@ -99,6 +102,16 @@ function gradlePluginPath(project: RNProject): string {
 function codegenPath(project: RNProject): string {
   const require = createRequire(path.join(project.reactNativePath, 'package.json'));
   return path.dirname(require.resolve('@react-native/codegen/package.json'));
+}
+
+// Android Gradle Plugin이 요구하는 Gradle 버전은 RN 버전마다 다르다. @react-native/gradle-plugin이
+// 자기 빌드에 쓰는 wrapper 설정이 그 RN 버전에 맞는 값이라 이것을 그대로 쓴다.
+function gradleWrapperProperties(project: RNProject): string {
+  const fallback = readFileSync(assetPath('android', 'gradle', 'wrapper', 'gradle-wrapper.properties'), 'utf8');
+  const pluginWrapper = path.join(gradlePluginPath(project), 'gradle', 'wrapper', 'gradle-wrapper.properties');
+  if (!existsSync(pluginWrapper)) return fallback;
+  const distributionUrl = readFileSync(pluginWrapper, 'utf8').match(/^distributionUrl=.+$/m)?.[0];
+  return distributionUrl ? fallback.replace(/^distributionUrl=.+$/m, distributionUrl) : fallback;
 }
 
 function groovyString(value: string): string {
@@ -282,6 +295,9 @@ android.useAndroidX=true
 newArchEnabled=true
 hermesEnabled=true
 reactNativeArchitectures=${config.android!.abis.join(',')}
+# AGP 9(RN 0.88+)의 내장 Kotlin과 새 DSL을 끈다. RN 공식 템플릿과 같은 설정이고, AGP 8에서는 쓰이지 않는다.
+android.builtInKotlin=false
+android.newDsl=false
 `;
 }
 
@@ -580,6 +596,7 @@ export async function prepareAndroidWorkspace(
   await mkdir(path.join(sdkDir, 'src', 'generated', 'java', 'io', 'nativepiece', 'host'), { recursive: true });
 
   await cp(assetPath('android', 'gradle'), path.join(dir, 'gradle'), { recursive: true });
+  await writeFile(path.join(dir, 'gradle', 'wrapper', 'gradle-wrapper.properties'), gradleWrapperProperties(project));
   await cp(assetPath('android', 'gradlew'), path.join(dir, 'gradlew'));
   await chmod(path.join(dir, 'gradlew'), 0o755);
   await cp(packagePath('assets', 'android-host', 'src', 'main'), path.join(sdkDir, 'src', 'main'), { recursive: true });

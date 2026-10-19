@@ -630,7 +630,7 @@ P2 측정 결과는 [성능 측정 결과](performance.md)에 있어요. 시뮬�
 
 | 항목 | 지원 범위 |
 |---|---|
-| React Native | 0.84 이상 (iOS prebuilt core 기본 사용 버전부터). 첫 릴리스는 0.86으로 검증해요. 마이너 버전마다 어댑터를 추가해요. |
+| React Native | 0.84 이상 (iOS prebuilt core 기본 사용 버전부터). 0.86과 0.88을 검증했어요(iOS·Android 빌드와 예제 앱 실행). `create-nativepiece --rn <버전>`으로 고르고, 마이너 버전마다 바뀌는 RN 내부 구조는 CLI가 버전별로 처리해요. |
 | 아키텍처 | New Architecture만 지원해요 |
 | JS 엔진 | Hermes만 지원해요 |
 | iOS | 설정값 (기본 17.0). Swift 5.9 이상. Xcode는 RN 버전 요구사항을 따라요. |
@@ -708,6 +708,11 @@ API 기본 URL 하드코딩(`https://poppang.co.kr/api/v1`)은 Nativepiece와 �
 
 | `create-nativepiece` 템플릿 | CI 워크플로(`.github/workflows/release.yml`) 포함 | CI 워크플로는 넣지 않았어요 | 배포 채널(P3)이 정해진 뒤 추가해요 |
 | 성능 지표 | `bundleLoad`, `bundleEval`, `surfaceFirstFrame`, `surfaceTTI` | `runtimeReady`, `surfaceMounted`, `surfaceReady` (`host.markReady()`) | JS가 알려 주는 시점으로 iOS·Android를 같은 기준으로 잴 수 있어요 |
+
+**RN 0.88에서 바뀐 것 (P3):**
+- iOS: React 헤더가 CocoaPods VFS overlay 대신 `React-Core-prebuilt/Headers/<이름공간>`에 실제 파일로 있어요. 헤더 처리 스크립트가 두 구조를 모두 읽어요.
+- Android: AGP 9, Gradle 9.4.1, compileSdk 37, Kotlin 2.2를 써요. 작업 공간은 `@react-native/gradle-plugin`의 Gradle wrapper 버전을 따르고, RN 공식 템플릿처럼 `android.builtInKotlin=false`, `android.newDsl=false`를 넣어요. 호스트 앱도 compileSdk 37과 AGP 9가 필요해요(RN 0.88 라이브러리의 요구 사항).
+- Hermes 버전 키가 `HERMES_V1_VERSION_NAME`에서 `HERMES_VERSION_NAME`으로 바뀌었어요.
 
 **해결한 제약 (P3):** 처음에는 iOS Swift Package가 `-ObjC`와 weak framework 링크에 `unsafeFlags`를 써서, SwiftPM이 원격(`.package(url:)`)으로 받는 것을 거부했어요. 지금은 빌드할 때 정적 framework마다 object를 하나로 미리 합치고(`ld -r`), 패키지의 C 타깃(`NativepieceBinaries/force_load.c`)이 framework마다 심볼 하나(`PodsDummy_<Pod>` 클래스)를 참조해요. 그러면 링커가 framework 전체를 가져와서 `-ObjC` 없이도 네이티브 모듈이 모두 링크돼요. JavaScriptCore는 일반 링크로 바꿨어요. 생성된 `Package.swift`에는 `unsafeFlags`가 없어요.
 
