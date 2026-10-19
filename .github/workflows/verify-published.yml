@@ -1,0 +1,57 @@
+name: Verify published packages
+
+# GitHub Packages에 발행된 npm 패키지로 사용자와 같은 방식(npm init)으로 모듈을 만들고 빌드해요.
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 확인할 Nativepiece 버전 (예 0.1.0)
+        required: true
+  workflow_run:
+    workflows: [Release]
+    types: [completed]
+
+permissions:
+  contents: read
+  packages: read
+
+jobs:
+  android:
+    name: npm init → Android build
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: https://npm.pkg.github.com
+          scope: '@team-poppang'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Install NDK
+        run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;27.1.12297006" > /dev/null
+      - name: Resolve version
+        id: version
+        run: |
+          if [ -n "${{ inputs.version }}" ]; then echo "value=${{ inputs.version }}" >> "$GITHUB_OUTPUT"
+          else echo "value=${{ github.event.workflow_run.head_branch }}" | sed 's/=v/=/' >> "$GITHUB_OUTPUT"; fi
+      - name: Create module from the registry
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        working-directory: ${{ runner.temp }}
+        run: npm init @team-poppang/nativepiece@${{ steps.version.outputs.value }} sample -- --group io.nativepiece.verify
+      - name: Doctor
+        working-directory: ${{ runner.temp }}/sample
+        run: npx nativepiece doctor || true
+      - name: Build module (Android)
+        working-directory: ${{ runner.temp }}/sample
+        run: npx nativepiece build android
+      - name: Build example host app
+        working-directory: ${{ runner.temp }}/sample/example/android
+        run: |
+          echo "sdk.dir=$ANDROID_HOME" > local.properties
+          ./gradlew --console=plain :app:assembleDebug
