@@ -1,0 +1,53 @@
+# PopPang-iOS와 같은 형식의 릴리스 노트를 PR 라벨로 만들어요.
+name-template: 'v$RESOLVED_VERSION'
+tag-template: 'v$RESOLVED_VERSION'
+tag-prefix: 'v'
+
+categories:
+  - title: '✨ 새로운 기능이 추가되었어요'
+    semver-increment: minor
+    when:
+      labels:
+        - '✨ feature'
+  - title: '🐞 자잘한 버그를 수정했어요'
+    semver-increment: patch
+    when:
+      labels:
+        - '🔧 fix'
+        - '🔥 hotfix'
+  - title: '🛠 코드를 개선했어요'
+    semver-increment: patch
+    when:
+      labels:
+        - '⚙️ chore'
+        - '🔨 refactor'
+        - '✅ test'
+        - '📃 docs'
+  - title: '기타 변경'
+    semver-increment: patch
+
+change-template: '- $TITLE by @$AUTHOR in #$NUMBER'
+change-title-escapes: '\<*_&'
+sort-by: merged_at
+sort-direction: descending
+
+template: |
+  ## 이번 버전의 변경사항은 아래와 같아요
+
+  $CHANGES
+
+  ## 이번에 발행한 패키지
+
+  | 패키지 | 버전 |
+  |---|---|
+  | `@team-poppang/create-nativepiece` | `$RESOLVED_VERSION` |
+  | `@team-poppang/nativepiece-cli` | `$RESOLVED_VERSION` |
+  | `@team-poppang/nativepiece-runtime` | `$RESOLVED_VERSION` |
+
+  ```bash
+  npm init @team-poppang/nativepiece@$RESOLVED_VERSION my-module
+  ```
+
+  설치 준비와 지원 React Native 버전은 [README](https://github.com/team-PopPang/Nativepiece#readme)를 봐 주세요.
+
+no-changes-template: '변경사항이 없어요.'

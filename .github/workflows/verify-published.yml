@@ -1,15 +1,26 @@
 name: Verify published packages
 
 # GitHub Packages에 발행된 npm 패키지로 사용자와 같은 방식(npm init)으로 모듈을 만들고 빌드해요.
+# Release 워크플로가 발행한 뒤 이어서 호출하고, 수동으로도 실행할 수 있어요.
 on:
   workflow_dispatch:
     inputs:
       version:
-        description: 확인할 Nativepiece 버전 (예 0.1.0)
+        description: 확인할 Nativepiece 버전 (예 0.1.1)
         required: true
-  workflow_run:
-    workflows: [Release]
-    types: [completed]
+        type: string
+      ios:
+        description: iOS도 확인해요 (macOS 러너, RN 0.86 한 개)
+        type: boolean
+        default: false
+  workflow_call:
+    inputs:
+      version:
+        required: true
+        type: string
+      ios:
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -18,10 +29,16 @@ permissions:
 jobs:
   android:
     name: npm init → Android build
-    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
+      # RN Android 빌드는 러너 기본 여유 공간을 넘길 수 있어서 쓰지 않는 도구를 먼저 지워요.
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/.ghcup /usr/local/share/boost /opt/hostedtoolcache/CodeQL \
+            /usr/local/share/powershell /usr/share/swift /opt/microsoft /opt/google
+          find "$ANDROID_HOME/ndk" -mindepth 1 -maxdepth 1 ! -name 27.1.12297006 -exec sudo rm -rf {} +
+          df -h /
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -34,16 +51,11 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
       - name: Install NDK
         run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;27.1.12297006" > /dev/null
-      - name: Resolve version
-        id: version
-        run: |
-          if [ -n "${{ inputs.version }}" ]; then echo "value=${{ inputs.version }}" >> "$GITHUB_OUTPUT"
-          else echo "value=${{ github.event.workflow_run.head_branch }}" | sed 's/=v/=/' >> "$GITHUB_OUTPUT"; fi
       - name: Create module from the registry
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         working-directory: ${{ runner.temp }}
-        run: npm init @team-poppang/nativepiece@${{ steps.version.outputs.value }} sample -- --group io.nativepiece.verify
+        run: npm init @team-poppang/nativepiece@${{ inputs.version }} sample -- --group io.nativepiece.verify
       - name: Doctor
         working-directory: ${{ runner.temp }}/sample
         run: npx nativepiece doctor || true
@@ -55,3 +67,28 @@ jobs:
         run: |
           echo "sdk.dir=$ANDROID_HOME" > local.properties
           ./gradlew --console=plain :app:assembleDebug
+
+  ios:
+    name: npm init → iOS build
+    if: inputs.ios
+    runs-on: macos-latest
+    timeout-minutes: 90
+    steps:
+      - name: Xcode
+        run: xcodebuild -version
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: https://npm.pkg.github.com
+          scope: '@team-poppang'
+      - name: Create module from the registry
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        working-directory: ${{ runner.temp }}
+        run: npm init @team-poppang/nativepiece@${{ inputs.version }} sample -- --group io.nativepiece.verify
+      - name: Build module (iOS)
+        working-directory: ${{ runner.temp }}/sample
+        run: npx nativepiece build ios
+      - name: Build example host app
+        working-directory: ${{ runner.temp }}/sample/example/ios
+        run: xcodebuild build -project ExampleHost.xcodeproj -scheme ExampleHost -destination 'generic/platform=iOS Simulator' -configuration Release CODE_SIGNING_ALLOWED=NO
