@@ -101,7 +101,7 @@ flowchart LR
   subgraph Dev["모듈 개발자 (RN 레포)"]
     C1["create-nativepiece<br/>새 모듈 앱 생성"]
     C2["nativepiece init<br/>기존 RN 앱 모듈화"]
-    SRC["RN 소스<br/>+ nativepiece.config.ts<br/>+ @nativepiece/runtime"]
+    SRC["RN 소스<br/>+ nativepiece.config.ts<br/>+ @team-poppang/nativepiece-runtime"]
     B["nativepiece build ios / android"]
     P["nativepiece publish"]
     C1 --> SRC
@@ -200,8 +200,8 @@ NativepieceScreen(
 Nativepiece/
 ├─ packages/
 │  ├─ create-nativepiece/     새 모듈 앱 생성 (npm create 진입점)
-│  ├─ cli/                    @nativepiece/cli — init, doctor, dev, build, codegen, publish
-│  ├─ runtime/                @nativepiece/runtime — JS API, TurboModule spec
+│  ├─ cli/                    @team-poppang/nativepiece-cli — init, doctor, dev, build, codegen, publish
+│  ├─ runtime/                @team-poppang/nativepiece-runtime — JS API, TurboModule spec
 │  ├─ ios-host/               NativepieceKit — Swift/ObjC++ 소스 (결과물에 소스로 포함)
 │  ├─ android-host/           nativepiece-host — Kotlin 소스 (결과물 AAR에 포함)
 │  └─ gradle-plugin/          io.nativepiece.android — AAR 패키징 플러그인
@@ -223,7 +223,7 @@ Nativepiece/
 모듈 프로젝트 루트에 `nativepiece.config.ts`를 둬요. PopPang의 하드코딩 값은 모두 여기로 옮겨요.
 
 ```ts
-import { defineConfig } from '@nativepiece/cli';
+import { defineConfig } from '@team-poppang/nativepiece-cli';
 
 export default defineConfig({
   name: 'PopPangRN',              // 프레임워크 이름, Swift 모듈 이름, 생성 타입 접두사
@@ -311,7 +311,7 @@ my-module/
 3. **진입점 생성** — `nativepiece.entry.ts`를 만들어요.
    - 기존 `AppRegistry.registerComponent` 호출을 찾아 `defineModule`의 화면으로 등록하는 코드를 제안해요.
    - 자동 변환이 어려우면 TODO 주석과 함께 기존 루트 컴포넌트를 화면 하나로 감싸요.
-4. **의존성 추가** — `@nativepiece/runtime`과 `@nativepiece/cli`를 devDependency로 추가하고 `package.json` 스크립트를 추가해요.
+4. **의존성 추가** — `@team-poppang/nativepiece-runtime`과 `@team-poppang/nativepiece-cli`를 devDependency로 추가하고 `package.json` 스크립트를 추가해요.
 5. **정리** — `.gitignore`에 `.nativepiece/`를 추가해요.
 6. **이전 파이프라인 감지** — `react_native_prebuild/` 같은 기존 빌드 디렉터리를 찾으면 삭제하지 않고, 마이그레이션 안내를 출력해요.
 
@@ -330,13 +330,13 @@ my-module/
 | 네이티브 모듈 | Old Architecture 전용 모듈 (interop 레이어 의존) | 경고 |
 | 설정 | `name`이 Swift·Kotlin 식별자로 쓸 수 있는지 확인 | 차단 |
 
-### 7.4 JS 런타임 API (`@nativepiece/runtime`)
+### 7.4 JS 런타임 API (`@team-poppang/nativepiece-runtime`)
 
 #### 7.4.1 모듈 정의
 
 ```ts
 // nativepiece.entry.ts
-import { defineModule, defineEvent } from '@nativepiece/runtime';
+import { defineModule, defineEvent } from '@team-poppang/nativepiece-runtime';
 import { RequestScreen } from './src/screens/Request';
 import { RequestManagementScreen } from './src/screens/RequestManagement';
 
@@ -630,7 +630,7 @@ P2 측정 결과는 [성능 측정 결과](performance.md)에 있어요. 시뮬�
 
 | 항목 | 지원 범위 |
 |---|---|
-| React Native | 0.84 이상 (iOS prebuilt core 기본 사용 버전부터). 첫 릴리스는 0.86으로 검증해요. 마이너 버전마다 어댑터를 추가해요. |
+| React Native | 0.84 이상 (iOS prebuilt core 기본 사용 버전부터). 0.86과 0.88을 검증했어요(iOS·Android 빌드와 예제 앱 실행). `create-nativepiece --rn <버전>`으로 고르고, 마이너 버전마다 바뀌는 RN 내부 구조는 CLI가 버전별로 처리해요. |
 | 아키텍처 | New Architecture만 지원해요 |
 | JS 엔진 | Hermes만 지원해요 |
 | iOS | 설정값 (기본 17.0). Swift 5.9 이상. Xcode는 RN 버전 요구사항을 따라요. |
@@ -709,7 +709,12 @@ API 기본 URL 하드코딩(`https://poppang.co.kr/api/v1`)은 Nativepiece와 �
 | `create-nativepiece` 템플릿 | CI 워크플로(`.github/workflows/release.yml`) 포함 | CI 워크플로는 넣지 않았어요 | 배포 채널(P3)이 정해진 뒤 추가해요 |
 | 성능 지표 | `bundleLoad`, `bundleEval`, `surfaceFirstFrame`, `surfaceTTI` | `runtimeReady`, `surfaceMounted`, `surfaceReady` (`host.markReady()`) | JS가 알려 주는 시점으로 iOS·Android를 같은 기준으로 잴 수 있어요 |
 
-**알려진 제약:** iOS Swift Package는 `-ObjC`와 weak framework 링크에 `unsafeFlags`를 써요. SwiftPM은 원격(`.package(url:)`)으로 받은 패키지의 `unsafeFlags`를 허용하지 않아서, 지금은 로컬 경로 패키지로만 쓸 수 있어요. P3 배포 단계에서 해결해야 해요.
+**RN 0.88에서 바뀐 것 (P3):**
+- iOS: React 헤더가 CocoaPods VFS overlay 대신 `React-Core-prebuilt/Headers/<이름공간>`에 실제 파일로 있어요. 헤더 처리 스크립트가 두 구조를 모두 읽어요.
+- Android: AGP 9, Gradle 9.4.1, compileSdk 37, Kotlin 2.2를 써요. 작업 공간은 `@react-native/gradle-plugin`의 Gradle wrapper 버전을 따르고, RN 공식 템플릿처럼 `android.builtInKotlin=false`, `android.newDsl=false`를 넣어요. 호스트 앱도 compileSdk 37과 AGP 9가 필요해요(RN 0.88 라이브러리의 요구 사항).
+- Hermes 버전 키가 `HERMES_V1_VERSION_NAME`에서 `HERMES_VERSION_NAME`으로 바뀌었어요.
+
+**해결한 제약 (P3):** 처음에는 iOS Swift Package가 `-ObjC`와 weak framework 링크에 `unsafeFlags`를 써서, SwiftPM이 원격(`.package(url:)`)으로 받는 것을 거부했어요. 지금은 빌드할 때 정적 framework마다 object를 하나로 미리 합치고(`ld -r`), 패키지의 C 타깃(`NativepieceBinaries/force_load.c`)이 framework마다 심볼 하나(`PodsDummy_<Pod>` 클래스)를 참조해요. 그러면 링커가 framework 전체를 가져와서 `-ObjC` 없이도 네이티브 모듈이 모두 링크돼요. JavaScriptCore는 일반 링크로 바꿨어요. 생성된 `Package.swift`에는 `unsafeFlags`가 없어요.
 
 ## 14. 참고 자료
 

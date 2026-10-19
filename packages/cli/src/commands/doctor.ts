@@ -165,8 +165,8 @@ async function checkConfig(project: RNProject): Promise<CheckResult[]> {
   } catch (error) {
     results.push({ level: 'error', title: '설정 또는 계약에 문제가 있어요', detail: (error as Error).message });
   }
-  if (!installedVersion(project, '@nativepiece/runtime')) {
-    results.push({ level: 'error', title: '@nativepiece/runtime이 설치되지 않았어요', detail: '`npm install @nativepiece/runtime`' });
+  if (!installedVersion(project, '@team-poppang/nativepiece-runtime')) {
+    results.push({ level: 'error', title: '@team-poppang/nativepiece-runtime이 설치되지 않았어요', detail: '`npm install @team-poppang/nativepiece-runtime`' });
   }
   return results;
 }

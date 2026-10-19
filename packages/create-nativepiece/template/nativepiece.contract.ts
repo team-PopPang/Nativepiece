@@ -1,4 +1,4 @@
-import { call, defineContract, event, message, screen } from '@nativepiece/runtime';
+import { call, defineContract, event, message, screen } from '@team-poppang/nativepiece-runtime';
 
 // 모듈과 호스트 앱이 주고받는 것을 정의해요. `npm run codegen`이 이 파일로 Swift·Kotlin 타입을 만들어요.
 export default defineContract({

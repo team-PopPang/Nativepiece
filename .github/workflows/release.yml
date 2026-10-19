@@ -1,0 +1,43 @@
+name: Release
+
+# v0.1.0 같은 태그를 푸시하면 npm 패키지 3개를 GitHub Packages에 발행해요.
+# 태그 버전과 각 package.json의 version이 같아야 해요.
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  npm:
+    name: Publish npm packages
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          registry-url: https://npm.pkg.github.com
+          scope: '@team-poppang'
+      - run: npm ci
+      - run: npm run build
+      - name: Check versions
+        run: |
+          TAG="${GITHUB_REF_NAME#v}"
+          for pkg in packages/cli packages/runtime packages/create-nativepiece; do
+            VERSION=$(node -p "require('./$pkg/package.json').version")
+            if [ "$VERSION" != "$TAG" ]; then
+              echo "::error::$pkg version $VERSION does not match tag $TAG"
+              exit 1
+            fi
+          done
+      - name: Publish
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          npm publish -w packages/runtime
+          npm publish -w packages/cli
+          npm publish -w packages/create-nativepiece

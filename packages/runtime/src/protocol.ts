@@ -46,7 +46,7 @@ class Channel {
     if (nativeVersion !== PROTOCOL_VERSION) {
       console.error(
         `[Nativepiece] 프로토콜 버전이 달라요 (JS ${PROTOCOL_VERSION}, native ${nativeVersion}). ` +
-          '@nativepiece/runtime과 호스트 SDK를 같은 버전으로 빌드해 주세요.',
+          '@team-poppang/nativepiece-runtime과 호스트 SDK를 같은 버전으로 빌드해 주세요.',
       );
     }
     NativepieceHost.onEnvelope((json) => this.receive(json));

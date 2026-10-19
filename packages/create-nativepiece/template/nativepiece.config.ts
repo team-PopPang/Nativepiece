@@ -1,4 +1,4 @@
-import { defineConfig } from '@nativepiece/cli';
+import { defineConfig } from '@team-poppang/nativepiece-cli';
 
 export default defineConfig({
   // Swift 모듈 이름과 Kotlin 객체 이름으로 쓰여요.

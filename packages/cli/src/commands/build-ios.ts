@@ -7,7 +7,7 @@ import { workspaceDir } from '../project.js';
 import { buildFrameworks, loadCachedFrameworks, type IOSConfiguration } from '../ios/frameworks.js';
 import { assembleSwiftPackage } from '../ios/package.js';
 import { prepareIOSWorkspace, type IOSWorkspace } from '../ios/workspace.js';
-import { packagePath } from '../utils/assets.js';
+import { assetPath, packagePath } from '../utils/assets.js';
 import { run } from '../utils/exec.js';
 import { Fingerprint } from '../utils/fingerprint.js';
 import { log } from '../utils/log.js';
@@ -60,6 +60,8 @@ function localPodDirectories(workspace: IOSWorkspace, project: RNProject): strin
   for (const match of external.matchAll(/:path: "([^"]+)"/g)) {
     const directory = path.resolve(workspace.dir, match[1]);
     if (directory === project.reactNativePath || directory.startsWith(`${project.reactNativePath}${path.sep}`)) continue;
+    // 작업 공간 안의 Pod(ReactCodegen 등)은 codegen이 archive할 때마다 다시 만든다. 입력은 이미 키에 들어가 있으므로 뺀다.
+    if (directory.startsWith(`${workspace.dir}${path.sep}`)) continue;
     directories.add(directory);
   }
   return [...directories].sort();
@@ -89,13 +91,15 @@ async function frameworksFingerprint(
   configuration: IOSConfiguration,
 ): Promise<string> {
   const xcodeVersion = await run('xcodebuild', ['-version'], { inherit: false });
-  const fingerprint = new Fingerprint('nativepiece-ios-frameworks-v2')
+  const fingerprint = new Fingerprint('nativepiece-ios-frameworks-v3')
     .value('configuration', configuration)
     .value('cli', cliVersion())
     .value('xcode', xcodeVersion)
     .value('deploymentTarget', config.ios.deploymentTarget)
     .value('prebuilts', config.ios.useRNPrebuilts)
     .value('stripSimulatorDebugSymbols', config.ios.stripSimulatorDebugSymbols)
+    // 개발 중에는 CLI 버전이 같아도 헤더 처리 스크립트가 바뀔 수 있다.
+    .file(assetPath('ios', 'materialize_react_vfs_headers.rb'))
     .file(path.join(workspace.dir, 'Podfile.lock'));
   for (const directory of localPodDirectories(workspace, project)) hashNativeSources(fingerprint, directory);
   return fingerprint.digest();
