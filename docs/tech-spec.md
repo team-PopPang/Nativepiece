@@ -709,7 +709,7 @@ API 기본 URL 하드코딩(`https://poppang.co.kr/api/v1`)은 Nativepiece와 �
 | `create-nativepiece` 템플릿 | CI 워크플로(`.github/workflows/release.yml`) 포함 | CI 워크플로는 넣지 않았어요 | 배포 채널(P3)이 정해진 뒤 추가해요 |
 | 성능 지표 | `bundleLoad`, `bundleEval`, `surfaceFirstFrame`, `surfaceTTI` | `runtimeReady`, `surfaceMounted`, `surfaceReady` (`host.markReady()`) | JS가 알려 주는 시점으로 iOS·Android를 같은 기준으로 잴 수 있어요 |
 
-**알려진 제약:** iOS Swift Package는 `-ObjC`와 weak framework 링크에 `unsafeFlags`를 써요. SwiftPM은 원격(`.package(url:)`)으로 받은 패키지의 `unsafeFlags`를 허용하지 않아서, 지금은 로컬 경로 패키지로만 쓸 수 있어요. P3 배포 단계에서 해결해야 해요.
+**해결한 제약 (P3):** 처음에는 iOS Swift Package가 `-ObjC`와 weak framework 링크에 `unsafeFlags`를 써서, SwiftPM이 원격(`.package(url:)`)으로 받는 것을 거부했어요. 지금은 빌드할 때 정적 framework마다 object를 하나로 미리 합치고(`ld -r`), 패키지의 C 타깃(`NativepieceBinaries/force_load.c`)이 framework마다 심볼 하나(`PodsDummy_<Pod>` 클래스)를 참조해요. 그러면 링커가 framework 전체를 가져와서 `-ObjC` 없이도 네이티브 모듈이 모두 링크돼요. JavaScriptCore는 일반 링크로 바꿨어요. 생성된 `Package.swift`에는 `unsafeFlags`가 없어요.
 
 ## 14. 참고 자료
 

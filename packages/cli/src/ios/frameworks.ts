@@ -7,6 +7,7 @@ import { run } from '../utils/exec.js';
 import { log } from '../utils/log.js';
 import { PODS_SCHEME, PREBUILD_TARGET, type IOSWorkspace } from './workspace.js';
 import { readLinkerFlags, type LinkerFlags } from './linker-flags.js';
+import { prelinkStaticFrameworks, type ForceLoadSymbol } from './prelink.js';
 
 const PLIST_BUDDY = '/usr/libexec/PlistBuddy';
 
@@ -14,6 +15,7 @@ export interface FrameworksOutput {
   dir: string;
   names: string[];
   linkerFlags: LinkerFlags;
+  forceLoadSymbols: ForceLoadSymbol[];
 }
 
 async function plist(plistPath: string, command: string): Promise<string | null> {
@@ -201,9 +203,10 @@ async function stripSignatures(outDir: string): Promise<void> {
 export async function loadCachedFrameworks(cacheDir: string): Promise<FrameworksOutput | null> {
   const manifestPath = path.join(cacheDir, 'manifest.json');
   if (!existsSync(manifestPath)) return null;
-  const manifest = JSON.parse(readFileSync(manifestPath, 'utf8')) as { names: string[]; linkerFlags: LinkerFlags };
+  const manifest = JSON.parse(readFileSync(manifestPath, 'utf8')) as Omit<FrameworksOutput, 'dir'>;
+  if (!manifest.forceLoadSymbols) return null;
   if (!manifest.names.every((name) => existsSync(path.join(cacheDir, 'Frameworks', `${name}.xcframework`)))) return null;
-  return { dir: path.join(cacheDir, 'Frameworks'), names: manifest.names, linkerFlags: manifest.linkerFlags };
+  return { dir: path.join(cacheDir, 'Frameworks'), ...manifest };
 }
 
 // Pods를 archive해 배포용 XCFramework 세트를 만든다. 결과는 fingerprint별 캐시 디렉터리에 저장한다.
@@ -237,11 +240,13 @@ export async function buildFrameworks(
   await normalizeMinimumOSVersion(frameworksDir, config.ios.deploymentTarget);
   await removeUnusedSlices(frameworksDir);
   if (config.ios.stripSimulatorDebugSymbols) await stripSimulatorDebugInfo(frameworksDir);
+  // 원격 Swift Package에서도 -ObjC 없이 네이티브 모듈이 모두 링크되게 한다.
+  await rm(path.join(frameworksDir, `Pods_${PREBUILD_TARGET}.xcframework`), { recursive: true, force: true });
+  log.step('정적 framework 미리 합치기');
+  const forceLoadSymbols = await prelinkStaticFrameworks(frameworksDir, config.ios.deploymentTarget);
   await stripSignatures(frameworksDir);
   await rm(path.join(staging, 'archives'), { recursive: true, force: true });
 
-  // 빌드 산출물이 아닌 aggregate 타깃은 패키지에 넣지 않는다.
-  await rm(path.join(frameworksDir, `Pods_${PREBUILD_TARGET}.xcframework`), { recursive: true, force: true });
 
   const names = (await readdir(frameworksDir))
     .filter((entry) => entry.endsWith('.xcframework'))
@@ -249,9 +254,9 @@ export async function buildFrameworks(
     .sort();
   const linkerFlags = await readLinkerFlags(workspace.dir, new Set(names));
 
-  await writeFile(path.join(staging, 'manifest.json'), JSON.stringify({ names, linkerFlags }, null, 2));
+  await writeFile(path.join(staging, 'manifest.json'), JSON.stringify({ names, linkerFlags, forceLoadSymbols }, null, 2));
   await rm(cacheDir, { recursive: true, force: true });
   await rename(staging, cacheDir);
 
-  return { dir: path.join(cacheDir, 'Frameworks'), names, linkerFlags };
+  return { dir: path.join(cacheDir, 'Frameworks'), names, linkerFlags, forceLoadSymbols };
 }

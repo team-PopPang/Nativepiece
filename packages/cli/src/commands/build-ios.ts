@@ -89,7 +89,7 @@ async function frameworksFingerprint(
   configuration: IOSConfiguration,
 ): Promise<string> {
   const xcodeVersion = await run('xcodebuild', ['-version'], { inherit: false });
-  const fingerprint = new Fingerprint('nativepiece-ios-frameworks-v2')
+  const fingerprint = new Fingerprint('nativepiece-ios-frameworks-v3')
     .value('configuration', configuration)
     .value('cli', cliVersion())
     .value('xcode', xcodeVersion)
