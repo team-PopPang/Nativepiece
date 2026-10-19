@@ -1,9 +1,24 @@
 name: CI
 
+# 문서와 릴리스 설정만 바뀐 PR에서는 빌드할 코드가 없어서 돌리지 않아요.
 on:
   pull_request:
+    paths-ignore:
+      - '**/*.md'
+      - 'docs/**'
+      - '.github/labels.json'
+      - '.github/release-drafter.yml'
+      - '.github/workflows/release.yml'
+      - '.github/workflows/verify-published.yml'
   push:
     branches: [main]
+    paths-ignore:
+      - '**/*.md'
+      - 'docs/**'
+      - '.github/labels.json'
+      - '.github/release-drafter.yml'
+      - '.github/workflows/release.yml'
+      - '.github/workflows/verify-published.yml'
     tags: ['v*']
   workflow_dispatch:
     inputs:
