@@ -1,0 +1,20 @@
+pluginManagement {
+    repositories {
+        google()
+        mavenCentral()
+        gradlePluginPortal()
+    }
+}
+
+dependencyResolutionManagement {
+    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+    repositories {
+        // `npm run build:android`이 만든 Maven 저장소예요. 실제 앱에서는 원격 저장소 주소를 넣어요.
+        maven { url = uri("../../.nativepiece/output/android/maven") }
+        google()
+        mavenCentral()
+    }
+}
+
+rootProject.name = "ExampleHost"
+include(":app")

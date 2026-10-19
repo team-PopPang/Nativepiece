@@ -3,7 +3,8 @@
   "private": true,
   "workspaces": [
     "packages/cli",
-    "packages/runtime"
+    "packages/runtime",
+    "packages/create-nativepiece"
   ],
   "scripts": {
     "build": "npm run build --workspaces --if-present",

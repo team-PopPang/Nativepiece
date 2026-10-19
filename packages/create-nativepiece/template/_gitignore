@@ -1,0 +1,14 @@
+node_modules/
+.nativepiece/
+.DS_Store
+
+# example/ios
+example/ios/build/
+xcuserdata/
+
+# example/android
+example/android/.gradle/
+example/android/build/
+example/android/app/build/
+example/android/local.properties
+.kotlin/
