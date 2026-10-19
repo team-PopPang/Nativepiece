@@ -1,5 +1,5 @@
 {
-  "name": "@nativepiece/cli",
+  "name": "@team-poppang/nativepiece-cli",
   "version": "0.1.0",
   "description": "Build a React Native app into a Swift Package and an Android AAR",
   "type": "module",
@@ -35,5 +35,13 @@
   },
   "engines": {
     "node": ">=22.11.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/team-PopPang/Nativepiece.git",
+    "directory": "packages/cli"
+  },
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com"
   }
 }

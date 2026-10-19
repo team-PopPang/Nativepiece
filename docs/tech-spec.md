@@ -101,7 +101,7 @@ flowchart LR
   subgraph Dev["모듈 개발자 (RN 레포)"]
     C1["create-nativepiece<br/>새 모듈 앱 생성"]
     C2["nativepiece init<br/>기존 RN 앱 모듈화"]
-    SRC["RN 소스<br/>+ nativepiece.config.ts<br/>+ @nativepiece/runtime"]
+    SRC["RN 소스<br/>+ nativepiece.config.ts<br/>+ @team-poppang/nativepiece-runtime"]
     B["nativepiece build ios / android"]
     P["nativepiece publish"]
     C1 --> SRC
@@ -200,8 +200,8 @@ NativepieceScreen(
 Nativepiece/
 ├─ packages/
 │  ├─ create-nativepiece/     새 모듈 앱 생성 (npm create 진입점)
-│  ├─ cli/                    @nativepiece/cli — init, doctor, dev, build, codegen, publish
-│  ├─ runtime/                @nativepiece/runtime — JS API, TurboModule spec
+│  ├─ cli/                    @team-poppang/nativepiece-cli — init, doctor, dev, build, codegen, publish
+│  ├─ runtime/                @team-poppang/nativepiece-runtime — JS API, TurboModule spec
 │  ├─ ios-host/               NativepieceKit — Swift/ObjC++ 소스 (결과물에 소스로 포함)
 │  ├─ android-host/           nativepiece-host — Kotlin 소스 (결과물 AAR에 포함)
 │  └─ gradle-plugin/          io.nativepiece.android — AAR 패키징 플러그인
@@ -223,7 +223,7 @@ Nativepiece/
 모듈 프로젝트 루트에 `nativepiece.config.ts`를 둬요. PopPang의 하드코딩 값은 모두 여기로 옮겨요.
 
 ```ts
-import { defineConfig } from '@nativepiece/cli';
+import { defineConfig } from '@team-poppang/nativepiece-cli';
 
 export default defineConfig({
   name: 'PopPangRN',              // 프레임워크 이름, Swift 모듈 이름, 생성 타입 접두사
@@ -311,7 +311,7 @@ my-module/
 3. **진입점 생성** — `nativepiece.entry.ts`를 만들어요.
    - 기존 `AppRegistry.registerComponent` 호출을 찾아 `defineModule`의 화면으로 등록하는 코드를 제안해요.
    - 자동 변환이 어려우면 TODO 주석과 함께 기존 루트 컴포넌트를 화면 하나로 감싸요.
-4. **의존성 추가** — `@nativepiece/runtime`과 `@nativepiece/cli`를 devDependency로 추가하고 `package.json` 스크립트를 추가해요.
+4. **의존성 추가** — `@team-poppang/nativepiece-runtime`과 `@team-poppang/nativepiece-cli`를 devDependency로 추가하고 `package.json` 스크립트를 추가해요.
 5. **정리** — `.gitignore`에 `.nativepiece/`를 추가해요.
 6. **이전 파이프라인 감지** — `react_native_prebuild/` 같은 기존 빌드 디렉터리를 찾으면 삭제하지 않고, 마이그레이션 안내를 출력해요.
 
@@ -330,13 +330,13 @@ my-module/
 | 네이티브 모듈 | Old Architecture 전용 모듈 (interop 레이어 의존) | 경고 |
 | 설정 | `name`이 Swift·Kotlin 식별자로 쓸 수 있는지 확인 | 차단 |
 
-### 7.4 JS 런타임 API (`@nativepiece/runtime`)
+### 7.4 JS 런타임 API (`@team-poppang/nativepiece-runtime`)
 
 #### 7.4.1 모듈 정의
 
 ```ts
 // nativepiece.entry.ts
-import { defineModule, defineEvent } from '@nativepiece/runtime';
+import { defineModule, defineEvent } from '@team-poppang/nativepiece-runtime';
 import { RequestScreen } from './src/screens/Request';
 import { RequestManagementScreen } from './src/screens/RequestManagement';
 

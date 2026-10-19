@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { useHost, useHostMessage } from '@nativepiece/runtime';
+import { useHost, useHostMessage } from '@team-poppang/nativepiece-runtime';
 import contract from '../../nativepiece.contract';
 
 export function HomeScreen({ userName }: { userName: string }) {

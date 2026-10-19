@@ -163,7 +163,8 @@ async function syncExampleAndroidVersions(root: string) {
 async function copyTemplate(source: string, destination: string, values: Record<string, string>) {
   await mkdir(destination, { recursive: true });
   for (const entry of await readdir(source, { withFileTypes: true })) {
-    const name = entry.name === '_gitignore' ? '.gitignore' : entry.name;
+    // npm은 .gitignore와 .npmrc를 패키지에 넣지 않아서 다른 이름으로 담아 두고 복사할 때 바꾼다.
+    const name = entry.name === '_gitignore' ? '.gitignore' : entry.name === '_npmrc' ? '.npmrc' : entry.name;
     const target = path.join(destination, name === '__androidPackagePath__' ? values.androidPackagePath : name);
     const from = path.join(source, entry.name);
 
@@ -233,6 +234,7 @@ async function create(directory: string, options: Options) {
 }
 
 const program = new Command('create-nativepiece')
+  .usage('<directory> [options]  (npm init @team-poppang/nativepiece <directory>)')
   .version(version)
   .description('Swift Package와 Android AAR로 빌드할 수 있는 React Native 모듈 앱을 만들어요.')
   .argument('<directory>', '만들 폴더')

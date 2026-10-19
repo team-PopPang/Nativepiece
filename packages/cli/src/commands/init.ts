@@ -118,7 +118,7 @@ function moduleName(project: RNProject): string {
 }
 
 function renderConfig(project: RNProject): string {
-  return `import { defineConfig } from '@nativepiece/cli';
+  return `import { defineConfig } from '@team-poppang/nativepiece-cli';
 
 export default defineConfig({
   // Swift 모듈 이름과 Kotlin 객체 이름으로 쓰여요.
@@ -140,7 +140,7 @@ function renderContract(screens: RegisteredScreen[]): string {
   const screenLines = screens.length > 0
     ? screens.map((screen) => `    // 기존 AppRegistry 이름: '${screen.appKey}'. props 타입을 채워 주세요.\n    ${screen.screenName}: screen(),`).join('\n')
     : '    main: screen(),';
-  return `import { call, defineContract, event, message, screen } from '@nativepiece/runtime';
+  return `import { call, defineContract, event, message, screen } from '@team-poppang/nativepiece-runtime';
 
 // 모듈과 호스트 앱이 주고받는 것을 정의해요. \`nativepiece codegen\`이 이 파일로 Swift·Kotlin 타입을 만들어요.
 export default defineContract({
@@ -168,7 +168,7 @@ void message;
 function renderEntry(screens: RegisteredScreen[], project: RNProject): string {
   if (screens.length === 0) {
     return `import { View } from 'react-native';
-import { defineModule } from '@nativepiece/runtime';
+import { defineModule } from '@team-poppang/nativepiece-runtime';
 import contract from './nativepiece.contract';
 
 // TODO: 모듈로 보여 줄 화면 컴포넌트로 바꿔 주세요.
@@ -193,7 +193,7 @@ export default defineModule(contract, {
   }
   const importLines = [...imports].map(([binding, [importPath]]) => `import ${binding} from '${importPath}';`);
 
-  return `import { defineModule } from '@nativepiece/runtime';
+  return `import { defineModule } from '@team-poppang/nativepiece-runtime';
 import contract from './nativepiece.contract';
 ${importLines.join('\n')}
 
@@ -257,19 +257,29 @@ export async function init(project: RNProject, options: InitOptions = {}): Promi
     'nativepiece:build:android': 'nativepiece build android',
   };
   const missingScripts = Object.keys(scripts).filter((name) => !packageJson.scripts?.[name]);
-  const needsRuntime = !packageJson.dependencies?.['@nativepiece/runtime'];
-  const needsCli = !packageJson.devDependencies?.['@nativepiece/cli'];
+  const needsRuntime = !packageJson.dependencies?.['@team-poppang/nativepiece-runtime'];
+  const needsCli = !packageJson.devDependencies?.['@team-poppang/nativepiece-cli'];
   if (needsRuntime || needsCli || missingScripts.length > 0) {
     plan.push({
       path: 'package.json',
-      description: '@nativepiece/runtime, @nativepiece/cli 의존성과 nativepiece:* 스크립트 추가',
+      description: '@team-poppang/nativepiece-runtime, @team-poppang/nativepiece-cli 의존성과 nativepiece:* 스크립트 추가',
       apply: async () => {
-        if (needsRuntime) packageJson.dependencies = { ...packageJson.dependencies, '@nativepiece/runtime': version };
-        if (needsCli) packageJson.devDependencies = { ...packageJson.devDependencies, '@nativepiece/cli': version };
+        if (needsRuntime) packageJson.dependencies = { ...packageJson.dependencies, '@team-poppang/nativepiece-runtime': version };
+        if (needsCli) packageJson.devDependencies = { ...packageJson.devDependencies, '@team-poppang/nativepiece-cli': version };
         packageJson.scripts = { ...packageJson.scripts };
         for (const name of missingScripts) packageJson.scripts[name] = scripts[name];
         await writeFile(packageJsonPath, `${JSON.stringify(packageJson, null, 2)}\n`);
       },
+    });
+  }
+
+  const npmrc = path.join(project.root, '.npmrc');
+  const registryLine = '@team-poppang:registry=https://npm.pkg.github.com';
+  if (!existsSync(npmrc) || !readFileSync(npmrc, 'utf8').includes('@team-poppang:registry')) {
+    plan.push({
+      path: '.npmrc',
+      description: '@team-poppang 패키지를 GitHub Packages에서 받도록 설정 (토큰은 넣지 않아요)',
+      apply: () => appendFile(npmrc, `\n# Nativepiece\n${registryLine}\n`),
     });
   }
 
@@ -302,7 +312,7 @@ export async function init(project: RNProject, options: InitOptions = {}): Promi
   }
 
   console.log(pc.bold('\n다음 단계'));
-  console.log('  1. npm install');
+  console.log('  1. npm install  (GitHub Packages 읽기 토큰이 필요해요: README의 "설치 준비" 참고)');
   console.log('  2. nativepiece.contract.ts에 화면 props, 이벤트, 호출을 채워요');
   console.log('  3. npx nativepiece doctor');
   console.log('  4. npx nativepiece build ios / npx nativepiece build android');

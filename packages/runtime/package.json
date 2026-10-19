@@ -1,5 +1,5 @@
 {
-  "name": "@nativepiece/runtime",
+  "name": "@team-poppang/nativepiece-runtime",
   "version": "0.1.0",
   "description": "JS runtime and native bridge for Nativepiece modules",
   "main": "src/index.tsx",
@@ -37,5 +37,13 @@
         "NativepieceHost": "NPNativepieceHost"
       }
     }
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/team-PopPang/Nativepiece.git",
+    "directory": "packages/runtime"
+  },
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com"
   }
 }
