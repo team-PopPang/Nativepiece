@@ -1,0 +1,89 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      ios:
+        description: iOS 빌드도 실행해요 (macOS 러너)
+        type: boolean
+        default: false
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  js:
+    name: JS (build, typecheck)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - run: npm run typecheck
+
+  android:
+    name: Android (create → build → example)
+    runs-on: ubuntu-latest
+    needs: js
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: gradle/actions/setup-gradle@v4
+      # 템플릿의 react-native 0.86이 요구하는 NDK 버전이다 (react-native/gradle/libs.versions.toml).
+      - name: Install NDK
+        run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;27.1.12297006" > /dev/null
+      - run: npm ci
+      - run: npm run build
+      - name: Create sample module
+        run: node packages/create-nativepiece/dist/index.js "$RUNNER_TEMP/sample" --group io.nativepiece.ci --nativepiece "$GITHUB_WORKSPACE"
+      - name: Doctor
+        working-directory: ${{ runner.temp }}/sample
+        run: npx nativepiece doctor || true
+      - name: Build module (Android)
+        working-directory: ${{ runner.temp }}/sample
+        run: npx nativepiece build android
+      - name: Build example host app
+        working-directory: ${{ runner.temp }}/sample/example/android
+        run: |
+          echo "sdk.dir=$ANDROID_HOME" > local.properties
+          ./gradlew --console=plain :app:assembleDebug
+
+  ios:
+    name: iOS (create → build → example)
+    if: startsWith(github.ref, 'refs/tags/') || inputs.ios
+    runs-on: macos-latest
+    needs: js
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - name: Create sample module
+        run: node packages/create-nativepiece/dist/index.js "$RUNNER_TEMP/sample" --group io.nativepiece.ci --nativepiece "$GITHUB_WORKSPACE"
+      - name: Build module (iOS)
+        working-directory: ${{ runner.temp }}/sample
+        run: npx nativepiece build ios
+      - name: Build example host app
+        working-directory: ${{ runner.temp }}/sample/example/ios
+        run: xcodebuild build -project ExampleHost.xcodeproj -scheme ExampleHost -destination 'generic/platform=iOS Simulator' -configuration Release CODE_SIGNING_ALLOWED=NO
