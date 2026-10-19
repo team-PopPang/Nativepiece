@@ -10,6 +10,7 @@ import { buildAndroid } from './commands/build-android.js';
 import { generateSources, writeGeneratedSources } from './codegen/index.js';
 import { doctor } from './commands/doctor.js';
 import { publishIOS } from './commands/publish-ios.js';
+import { publishAndroid } from './commands/publish-android.js';
 import { init } from './commands/init.js';
 import { packagePath } from './utils/assets.js';
 import { log } from './utils/log.js';
@@ -125,15 +126,18 @@ program
 program
   .command('publish')
   .description('빌드한 결과물을 배포해요')
-  .argument('<platform>', 'ios')
+  .argument('<platform>', 'ios | android')
   .option('--project-root <path>', 'RN 프로젝트 경로', '.')
   .option('--repo <owner/name>', 'iOS 배포 레포 (기본값: publish.ios.repo)')
-  .option('--dry-run', '올리지 않고 배포할 내용만 만들어요')
+  .option('--url <url>', 'Android Maven 저장소 주소 (기본값: publish.android.url)')
+  .option('--dry-run', '올리지 않고 배포할 내용만 확인해요')
   .action(
-    action(async (platform: string, options: { projectRoot: string; repo?: string; dryRun?: boolean }) => {
+    action(async (platform: string, options: { projectRoot: string; repo?: string; url?: string; dryRun?: boolean }) => {
       const { project, config } = await loadProject(options.projectRoot);
       if (platform === 'ios') {
         await publishIOS(config, project, options);
+      } else if (platform === 'android') {
+        await publishAndroid(config, project, options);
       } else {
         throw new Error(`지원하지 않는 플랫폼이에요: ${platform}`);
       }

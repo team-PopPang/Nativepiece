@@ -75,6 +75,7 @@ MyModuleScreen(
 | `nativepiece build android` | Maven 저장소를 만들어요 |
 | `nativepiece dev` | Metro 개발 서버를 띄워요 |
 | `nativepiece publish ios [--repo owner/name] [--dry-run]` | Swift Package를 배포 레포에 올려요. 바이너리는 GitHub Release에 올라가요 |
+| `nativepiece publish android [--url <maven url>] [--dry-run]` | 빌드한 Maven 저장소의 artifact를 원격 Maven 저장소에 올려요 |
 
 ## iOS 배포
 
@@ -96,6 +97,16 @@ machine github.com
   login x-access-token
   password <GitHub 토큰>
 ```
+
+## Android 배포
+
+```bash
+npx nativepiece build android
+npx nativepiece publish android --url https://maven.pkg.github.com/my-org/my-module-android
+```
+
+- 네이티브 모듈 AAR을 먼저 올리고 SDK를 마지막에 올려요. 이미 있는 SDK 버전은 덮어쓰지 않아요.
+- 인증은 `NATIVEPIECE_MAVEN_USERNAME`, `NATIVEPIECE_MAVEN_PASSWORD` 환경 변수로 해요. GitHub Packages면 둘 다 없을 때 `gh` 로그인 정보를 써요. 토큰에 `write:packages` 권한이 있어야 해요.
 
 ## 요구 사항
 
