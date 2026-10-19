@@ -126,5 +126,8 @@ export async function buildAndroid(config: ResolvedConfig, project: RNProject): 
 
   log.success(`Maven 저장소를 만들었어요: ${workspace.repositoryDir}`);
   log.info(`의존성: implementation("${config.android.group}:${config.android.artifactId}:${config.version}")`);
+  if (config.android.compose) {
+    log.info(`Compose: implementation("${config.android.group}:${config.android.artifactId}-compose:${config.version}")`);
+  }
   return workspace.repositoryDir;
 }

@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 const cliRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const packagesRoot = path.resolve(cliRoot, '..');
 
-for (const host of ['ios-host', 'android-host']) {
+for (const host of ['ios-host', 'android-host', 'android-compose']) {
   const destination = path.join(cliRoot, 'assets', host);
   await rm(destination, { recursive: true, force: true });
   await cp(path.join(packagesRoot, host), destination, { recursive: true });

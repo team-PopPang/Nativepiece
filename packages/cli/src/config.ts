@@ -53,6 +53,8 @@ const configSchema = z.object({
       minSdk: z.number().int().min(24).optional(),
       compileSdk: z.number().int().optional(),
       abis: z.array(androidAbi).nonempty().default(['arm64-v8a', 'x86_64']),
+      // true면 Jetpack Compose용 artifact(<artifactId>-compose)를 함께 발행한다.
+      compose: z.boolean().default(true),
     })
     .optional(),
 });
@@ -78,6 +80,7 @@ export interface ResolvedConfig {
     minSdk?: number;
     compileSdk?: number;
     abis: string[];
+    compose: boolean;
   } | null;
   projectRoot: string;
   configPath: string;
@@ -135,6 +138,7 @@ export async function loadConfig(projectRoot: string, packageVersion: string): P
           minSdk: config.android.minSdk,
           compileSdk: config.android.compileSdk,
           abis: [...config.android.abis],
+          compose: config.android.compose,
         }
       : null,
     projectRoot,

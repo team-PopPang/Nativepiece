@@ -3,13 +3,14 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import type { ResolvedConfig } from '../config.js';
 import { workspaceDir } from '../project.js';
-import { renderKotlin } from './kotlin.js';
+import { renderKotlin, renderKotlinCompose } from './kotlin.js';
 import { loadContract, type ContractModel } from './model.js';
 import { renderSwift } from './swift.js';
 
 export interface GeneratedSources {
   swift: string | null;
   kotlin: string;
+  kotlinCompose: string;
   kotlinPackage: string;
 }
 
@@ -32,6 +33,7 @@ export function generateSources(config: ResolvedConfig): GeneratedSources {
   return {
     swift: model ? renderSwift(model, config.name, config.version) : null,
     kotlin: renderKotlin(model ?? EMPTY_MODEL, config.name, kotlinPackage, config.version, devServerEntry(config)),
+    kotlinCompose: renderKotlinCompose(model ?? EMPTY_MODEL, config.name, kotlinPackage, config.version),
     kotlinPackage,
   };
 }
@@ -43,5 +45,6 @@ export async function writeGeneratedSources(config: ResolvedConfig, sources: Gen
   await mkdir(path.join(outDir, 'android'), { recursive: true });
   if (sources.swift) await writeFile(path.join(outDir, 'ios', `${config.name}Contract.swift`), sources.swift);
   await writeFile(path.join(outDir, 'android', `${config.name}.kt`), sources.kotlin);
+  await writeFile(path.join(outDir, 'android', `${config.name}Compose.kt`), sources.kotlinCompose);
   return outDir;
 }

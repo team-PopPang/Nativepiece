@@ -6,15 +6,13 @@ import android.view.View
 import android.view.ViewGroup
 import androidx.activity.OnBackPressedCallback
 import androidx.fragment.app.Fragment
-import com.facebook.react.interfaces.fabric.ReactSurface
 import com.facebook.react.modules.core.DefaultHardwareBackBtnHandler
 import java.util.UUID
 
 /** RN 화면 하나를 보여 주는 Fragment예요. */
 class NativepieceFragment : Fragment(), DefaultHardwareBackBtnHandler {
-    private var surface: ReactSurface? = null
-    private val handlers = mutableMapOf<String, (NativepiecePayload) -> Unit>()
-    private val anyEventHandlers = mutableListOf<(String, NativepiecePayload) -> Unit>()
+    private var surface: NativepieceSurface? = null
+    private val pendingSetup = mutableListOf<(NativepieceSurface) -> Unit>()
 
     /** RN 화면이 닫기를 요청했을 때 실행해요. 지정하지 않으면 back stack을 pop하거나 Activity를 종료해요. */
     var onClose: (() -> Unit)? = null
@@ -31,7 +29,7 @@ class NativepieceFragment : Fragment(), DefaultHardwareBackBtnHandler {
 
     private val backCallback = object : OnBackPressedCallback(true) {
         override fun handleOnBackPressed() {
-            Nativepiece.reactHost.onBackPressed()
+            surface?.onBackPressed()
         }
     }
 
@@ -41,44 +39,40 @@ class NativepieceFragment : Fragment(), DefaultHardwareBackBtnHandler {
     }
 
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View {
-        Channel.setEventHandler(surfaceId) { name, payload -> handle(name, payload) }
-
-        val props = Bundle(requireArguments().getBundle(ARG_PROPS) ?: Bundle()).apply {
-            putBundle(INTERNAL_PROP, Bundle().apply { putString("surfaceId", surfaceId) })
-        }
-        val surface = Nativepiece.reactHost.createSurface(requireContext(), screen, props)
+        val surface = NativepieceSurface(
+            requireContext(),
+            screen,
+            requireArguments().getBundle(ARG_PROPS) ?: Bundle(),
+            surfaceId,
+        )
+        surface.onClose = { close() }
+        pendingSetup.forEach { it(surface) }
         surface.start()
         this.surface = surface
-        return surface.view ?: error("React surface view를 만들지 못했어요.")
+        return surface.view
     }
 
     override fun onResume() {
         super.onResume()
-        Nativepiece.reactHost.onHostResume(requireActivity(), this)
+        surface?.onHostResume(requireActivity(), this)
     }
 
     override fun onPause() {
         super.onPause()
-        Nativepiece.reactHost.onHostPause(requireActivity())
+        surface?.onHostPause(requireActivity())
     }
 
     override fun onDestroyView() {
-        surface?.stop()
-        surface?.detach()
+        surface?.destroy()
         surface = null
-        Channel.setEventHandler(surfaceId, null)
         super.onDestroyView()
     }
 
     /** RN 화면이 보낸 이벤트를 받아요. */
-    fun on(name: String, handler: (payload: NativepiecePayload) -> Unit) {
-        handlers[name] = handler
-    }
+    fun on(name: String, handler: (payload: NativepiecePayload) -> Unit) = configure { it.on(name, handler) }
 
-    /** 모든 이벤트를 받아요. 생성된 `onEvent` 확장 함수가 이 API를 써요. */
-    fun onAnyEvent(handler: (name: String, payload: NativepiecePayload) -> Unit) {
-        anyEventHandlers += handler
-    }
+    /** 모든 이벤트를 받아요. 생성된 `on<모듈>Event` 확장 함수가 이 API를 써요. */
+    fun onAnyEvent(handler: (name: String, payload: NativepiecePayload) -> Unit) = configure { it.onAnyEvent(handler) }
 
     /** 이 화면에만 메시지를 보내요. [payload]는 Map, List, 기본 타입, JSONObject 중 하나예요. */
     @JvmOverloads
@@ -86,20 +80,17 @@ class NativepieceFragment : Fragment(), DefaultHardwareBackBtnHandler {
         Channel.sendMessage(name, payload, surfaceId)
     }
 
+    // view가 다시 만들어져도 handler가 유지되도록 등록 내용을 기억한다.
+    private fun configure(setup: (NativepieceSurface) -> Unit) {
+        pendingSetup += setup
+        surface?.let(setup)
+    }
+
     // RN이 뒤로 가기를 처리하지 않으면 시스템 기본 동작으로 넘긴다.
     override fun invokeDefaultOnBackPressed() {
         backCallback.isEnabled = false
         requireActivity().onBackPressedDispatcher.onBackPressed()
         backCallback.isEnabled = true
-    }
-
-    private fun handle(name: String, payload: NativepiecePayload) {
-        if (name == CLOSE_EVENT) {
-            close()
-            return
-        }
-        handlers[name]?.invoke(payload)
-        anyEventHandlers.forEach { it(name, payload) }
     }
 
     private fun close() {
@@ -113,12 +104,11 @@ class NativepieceFragment : Fragment(), DefaultHardwareBackBtnHandler {
 
     companion object {
         /** RN 쪽 `NAVIGATION_EVENT.close`와 같은 값이에요. */
-        const val CLOSE_EVENT = "np.close"
+        const val CLOSE_EVENT = NativepieceSurface.CLOSE_EVENT
 
         private const val ARG_SCREEN = "io.nativepiece.screen"
         private const val ARG_PROPS = "io.nativepiece.props"
         private const val ARG_SURFACE_ID = "io.nativepiece.surfaceId"
-        private const val INTERNAL_PROP = "__nativepiece"
 
         @JvmStatic
         fun newInstance(screen: NativepieceScreenRepresentable): NativepieceFragment =
