@@ -57,6 +57,11 @@ const configSchema = z.object({
       compose: z.boolean().default(true),
     })
     .optional(),
+  publish: z
+    .object({
+      ios: z.object({ repo: z.string().regex(/^[\w.-]+\/[\w.-]+$/, 'owner/name 형식이어야 해요') }).optional(),
+    })
+    .optional(),
 });
 
 export type NativepieceUserConfig = z.input<typeof configSchema>;
@@ -82,6 +87,7 @@ export interface ResolvedConfig {
     abis: string[];
     compose: boolean;
   } | null;
+  publish: { ios?: { repo: string } } | null;
   projectRoot: string;
   configPath: string;
 }
@@ -141,6 +147,7 @@ export async function loadConfig(projectRoot: string, packageVersion: string): P
           compose: config.android.compose,
         }
       : null,
+    publish: config.publish ?? null,
     projectRoot,
     configPath,
   };

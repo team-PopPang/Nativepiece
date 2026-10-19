@@ -29,10 +29,22 @@ function renderLinkerSettings(flags: LinkerFlags): string {
   return lines.map((line) => `                ${line},`).join('\n');
 }
 
-function renderPackageSwift(config: ResolvedConfig, frameworks: FrameworksOutput): string {
+export interface PackageManifest {
+  names: string[];
+  linkerFlags: LinkerFlags;
+}
+
+export const PACKAGE_MANIFEST = '.nativepiece-package.json';
+
+export type BinaryTargetSource = (name: string) => string;
+
+// 로컬 패키지는 Frameworks/ 경로를, 원격 패키지(publish)는 url과 checksum을 쓴다.
+const localBinary: BinaryTargetSource = (name) => `path: "Frameworks/${name}.xcframework"`;
+
+export function renderPackageSwift(config: ResolvedConfig, frameworks: PackageManifest, binary: BinaryTargetSource = localBinary): string {
   const binaryDependencies = frameworks.names.map((name) => `                "${name}",`).join('\n');
   const binaryTargets = frameworks.names
-    .map((name) => `        .binaryTarget(name: "${name}", path: "Frameworks/${name}.xcframework"),`)
+    .map((name) => `        .binaryTarget(name: "${name}", ${binary(name)}),`)
     .join('\n');
 
   return `// swift-tools-version:5.9
@@ -138,5 +150,8 @@ export async function assembleSwiftPackage(
   }
 
   await writeFile(path.join(outDir, 'Package.swift'), renderPackageSwift(config, frameworks));
+  // publish가 원격용 Package.swift를 다시 만들 수 있게 framework 목록을 남긴다.
+  const manifest: PackageManifest = { names: frameworks.names, linkerFlags: frameworks.linkerFlags };
+  await writeFile(path.join(outDir, PACKAGE_MANIFEST), `${JSON.stringify(manifest, null, 2)}\n`);
   return outDir;
 }

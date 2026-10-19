@@ -74,6 +74,28 @@ MyModuleScreen(
 | `nativepiece build ios [--dev]` | Swift Package를 만들어요. `--dev`는 Metro와 Fast Refresh를 쓰는 개발용이에요 |
 | `nativepiece build android` | Maven 저장소를 만들어요 |
 | `nativepiece dev` | Metro 개발 서버를 띄워요 |
+| `nativepiece publish ios [--repo owner/name] [--dry-run]` | Swift Package를 배포 레포에 올려요. 바이너리는 GitHub Release에 올라가요 |
+
+## iOS 배포
+
+```bash
+npx nativepiece build ios
+npx nativepiece publish ios --repo my-org/my-module-ios
+```
+
+- 배포 레포에는 원격용 `Package.swift`와 소스가 커밋되고 버전 태그(`config.version`)가 붙어요. XCFramework는 그 태그의 GitHub Release에 zip으로 올라가요.
+- 앱에서는 `.package(url: "https://github.com/my-org/my-module-ios", exact: "1.0.0")`로 추가해요.
+- 같은 버전은 덮어쓰지 않아요. 배포할 때마다 `package.json`의 version을 올려요.
+- 배포 레포가 비공개면 Xcode가 바이너리를 받을 수 있게 앱 개발자 PC와 CI의 `~/.netrc`에 읽기 토큰을 넣어야 해요. git clone 인증도 같은 파일로 할 수 있어요.
+
+```
+machine api.github.com
+  login x-access-token
+  password <GitHub 토큰>
+machine github.com
+  login x-access-token
+  password <GitHub 토큰>
+```
 
 ## 요구 사항
 
