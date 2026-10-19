@@ -1,0 +1,5 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+    <!-- 디버그 빌드에서 Metro(http://10.0.2.2:8081)에 접속할 수 있게 해요. -->
+    <application android:usesCleartextTraffic="true" tools:targetApi="28" />
+</manifest>

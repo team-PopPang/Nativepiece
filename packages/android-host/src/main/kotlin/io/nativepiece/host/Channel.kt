@@ -98,6 +98,7 @@ internal object Channel {
         val surfaceId = envelope.optString("surfaceId")
 
         when (envelope.optString("kind")) {
+            "lifecycle" -> MetricsTracker.lifecycle(name, envelope.optString("surfaceId").ifEmpty { null })
             "event" -> surfaceHandlers[surfaceId]?.invoke(name, payload)
             "call" -> {
                 val reply = NativepieceReply(envelope.optString("id"))

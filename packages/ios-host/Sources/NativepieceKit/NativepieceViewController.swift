@@ -39,6 +39,7 @@ open class NativepieceViewController: UIViewController {
         let surfaceId = surfaceId
         Task { @MainActor in
             Channel.shared.setEventHandler(nil, forSurface: surfaceId)
+            MetricsTracker.shared.surfaceRemoved(surfaceId)
         }
     }
 
@@ -47,6 +48,7 @@ open class NativepieceViewController: UIViewController {
             self?.handle(name: name, payload: payload)
         }, forSurface: surfaceId)
 
+        MetricsTracker.shared.surfaceCreated(surfaceId, screen: screen)
         var initialProperties = properties
         initialProperties["__nativepiece"] = ["surfaceId": surfaceId]
         view = Nativepiece.shared.makeRootView(moduleName: screen, properties: initialProperties)

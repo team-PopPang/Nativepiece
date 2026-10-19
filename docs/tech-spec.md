@@ -620,7 +620,9 @@ export default defineContract({
 | `surfaceFirstFrame` | 화면 생성부터 첫 프레임까지 |
 | `surfaceTTI` | 화면 생성부터 JS가 `markReady()`를 호출할 때까지 |
 
-목표 수치는 P2 시작 전에 PopPang에서 현재 값을 측정한 뒤 정해요. 기준 측정 기기는 iPhone 실기기 1종, Android 중급 실기기 1종으로 하고, 첫 진입(cold)과 재진입(warm)을 각각 10회 측정해 중앙값을 비교해요.
+P2 측정 결과는 [성능 측정 결과](performance.md)에 있어요. 시뮬레이터·에뮬레이터 값이라, 목표 수치는 실기기에서 다시 잰 뒤 정해요.
+
+목표 수치는 실기기 측정 후 PopPang에서 현재 값을 측정한 뒤 정해요. 기준 측정 기기는 iPhone 실기기 1종, Android 중급 실기기 1종으로 하고, 첫 진입(cold)과 재진입(warm)을 각각 10회 측정해 중앙값을 비교해요.
 
 ---
 
@@ -703,6 +705,9 @@ API 기본 URL 하드코딩(`https://poppang.co.kr/api/v1`)은 Nativepiece와 �
 | 화면 등록 이름 | `<config.name>.<screenKey>` | `<screenKey>` | 앱에 모듈을 하나만 넣기로 해서 접두사가 필요 없어요 |
 | 패키지 매니저 | pnpm | npm workspaces | PopPang-RN과 같은 도구를 써요 |
 | iOS 프로젝트 생성 | xcodeproj gem | `project.pbxproj`를 직접 생성 | Homebrew로 설치한 CocoaPods의 gem은 일반 ruby에서 불러올 수 없어요 |
+
+| `create-nativepiece` 템플릿 | CI 워크플로(`.github/workflows/release.yml`) 포함 | CI 워크플로는 넣지 않았어요 | 배포 채널(P3)이 정해진 뒤 추가해요 |
+| 성능 지표 | `bundleLoad`, `bundleEval`, `surfaceFirstFrame`, `surfaceTTI` | `runtimeReady`, `surfaceMounted`, `surfaceReady` (`host.markReady()`) | JS가 알려 주는 시점으로 iOS·Android를 같은 기준으로 잴 수 있어요 |
 
 **알려진 제약:** iOS Swift Package는 `-ObjC`와 weak framework 링크에 `unsafeFlags`를 써요. SwiftPM은 원격(`.package(url:)`)으로 받은 패키지의 `unsafeFlags`를 허용하지 않아서, 지금은 로컬 경로 패키지로만 쓸 수 있어요. P3 배포 단계에서 해결해야 해요.
 

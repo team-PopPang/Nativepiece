@@ -38,6 +38,8 @@ export interface Host {
     ...args: [...PayloadArgs<CallRequest<C>>, CallOptions?]
   ): Promise<CallResponse<C>>;
   close(): void;
+  /** 화면이 쓸 수 있는 상태가 됐다고 알려요. 호스트 SDK가 이 시점으로 surfaceReady 지표를 계산해요. */
+  markReady(): void;
 }
 
 const HostContext = createContext<Host | null>(null);
@@ -52,6 +54,7 @@ function createHost(surfaceId: string): Host {
       return channel.call(surfaceId, call.name, args[0], options?.timeoutMs ?? DEFAULT_CALL_TIMEOUT_MS);
     }) as Host['call'],
     close: () => channel.emit(surfaceId, NAVIGATION_EVENT.close, undefined),
+    markReady: () => channel.lifecycle('surfaceReady', surfaceId),
   };
 }
 
@@ -62,7 +65,10 @@ function withHost<Props extends object>(screenKey: string, Screen: ComponentType
     const surfaceId = internal?.surfaceId ?? screenKey;
     const host = useMemo(() => createHost(surfaceId), [surfaceId]);
 
-    useEffect(() => () => getChannel().dropSurface(surfaceId), [surfaceId]);
+    useEffect(() => {
+      getChannel().lifecycle('surfaceMounted', surfaceId);
+      return () => getChannel().dropSurface(surfaceId);
+    }, [surfaceId]);
 
     return (
       <HostContext.Provider value={host}>
@@ -89,6 +95,8 @@ export function defineModule<Contract extends ContractDefinition>(
     const Root = withHost(definition.name, component);
     AppRegistry.registerComponent(definition.name, () => Root);
   }
+  // 모든 화면이 등록됐으면 번들 평가가 끝난 것이다.
+  getChannel().lifecycle('runtimeReady');
   return contract;
 }
 

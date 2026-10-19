@@ -31,6 +31,7 @@ class NativepieceSurface @JvmOverloads constructor(
 
     init {
         Channel.setEventHandler(surfaceId) { name, payload -> handle(name, payload) }
+        MetricsTracker.surfaceCreated(surfaceId, screen)
         val initialProps = Bundle(props).apply {
             putBundle(INTERNAL_PROP, Bundle().apply { putString("surfaceId", surfaceId) })
         }
@@ -46,6 +47,7 @@ class NativepieceSurface @JvmOverloads constructor(
         surface.stop()
         surface.detach()
         Channel.setEventHandler(surfaceId, null)
+        MetricsTracker.surfaceRemoved(surfaceId)
     }
 
     /** 화면을 가진 Activity가 앞으로 나왔을 때 호출해요. */
