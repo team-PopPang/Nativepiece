@@ -18,7 +18,7 @@ def fail_with(message)
   exit 1
 end
 
-react_xcframework_path, dependencies_xcframework_path, hermes_headers_path, frameworks_dir, minimum_os_version, prebuilt_headers_path = ARGV
+react_xcframework_path, dependencies_xcframework_path, hermes_headers_path, frameworks_dir, minimum_os_version, prebuilt_headers_path, pods_headers_path = ARGV
 if [react_xcframework_path, dependencies_xcframework_path, hermes_headers_path, frameworks_dir].any?(&:nil?)
   fail_with(
     "usage: #{File.basename($PROGRAM_NAME)} <React.xcframework> " \
@@ -51,7 +51,7 @@ fail_with("Swift Package frameworks directory not found: #{frameworks_dir}") unl
 mappings = []
 
 if File.file?(template_path)
-  # RN 0.86 이하: CocoaPods VFS overlay(React-VFS-template.yaml)가 논리 경로와 실제 헤더를 연결한다.
+  # RN 0.85, 0.86: CocoaPods VFS overlay(React-VFS-template.yaml)가 논리 경로와 실제 헤더를 연결한다.
   fail_with("React shared headers not found: #{react_headers_root}") unless Dir.exist?(react_headers_root)
 
   template = YAML.load_file(template_path)
@@ -82,7 +82,7 @@ if File.file?(template_path)
 
   headers_root.fetch("contents", []).each { |entry| collect_mappings.call(entry, "") }
 elsif prebuilt_headers_path && Dir.exist?(prebuilt_headers_path)
-  # RN 0.88 이상: VFS 없이 React-Core-prebuilt/Headers 아래에 이름공간별 실제 헤더가 있다.
+  # RN 0.87 이상: VFS 없이 React-Core-prebuilt/Headers 아래에 이름공간별 실제 헤더가 있다.
   headers_dir = File.expand_path(prebuilt_headers_path)
   Dir.glob(File.join(headers_dir, "**", "*")).sort.each do |source_path|
     next unless File.file?(source_path)
@@ -91,8 +91,50 @@ elsif prebuilt_headers_path && Dir.exist?(prebuilt_headers_path)
     next unless logical_path.include?(File::SEPARATOR)
     mappings << [logical_path, source_path]
   end
+elsif pods_headers_path && Dir.exist?(pods_headers_path)
+  # RN 0.84: xcframework의 헤더는 Pod별로 평평하게 들어 있고 이름이 같은 파일이 서로 덮어써서 일부가 없다.
+  # CocoaPods 소비자는 Pods/Headers/{Public,Private}/<Pod>/<header_dir>/ 링크로 헤더를 찾으므로, 그 링크가
+  # 가리키는 react-native 원본 헤더를 쓴다. 바이너리와 같은 버전이고 비교 가능한 헤더는 내용이 같다.
+  pods_headers_dir = File.expand_path(pods_headers_path)
+  # 따로 처리하는 Pod(prebuilt 본체, 의존성, Hermes)은 뺀다.
+  skipped_pods = %w[React-Core-prebuilt ReactNativeDependencies hermes-engine]
+  sources_by_logical_path = {}
+
+  %w[Public Private].each do |visibility|
+    visibility_dir = File.join(pods_headers_dir, visibility)
+    next unless Dir.exist?(visibility_dir)
+
+    Dir.children(visibility_dir).sort.each do |pod|
+      next if skipped_pods.include?(pod)
+
+      pod_dir = File.join(visibility_dir, pod)
+      next unless File.directory?(pod_dir)
+
+      Dir.glob(File.join(pod_dir, "**", "*")).sort.each do |link_path|
+        next unless File.file?(link_path)
+
+        source_path = File.realpath(link_path)
+        # 앱이 autolink한 다른 라이브러리의 헤더는 그 라이브러리의 xcframework에 들어 있으므로 react-native 것만 받는다.
+        next unless source_path.include?("#{File::SEPARATOR}node_modules#{File::SEPARATOR}react-native#{File::SEPARATOR}")
+
+        relative = Pathname.new(link_path).relative_path_from(Pathname.new(pod_dir)).to_s
+        # header_dir 없이 Pod 루트에 있는 헤더는 Pod 이름(- 대신 _)을 이름공간으로 쓴다. 예: React_RCTAppDelegate/RCTAppDelegate.h
+        logical_path = relative.include?(File::SEPARATOR) ? relative : File.join(pod.tr("-", "_"), relative)
+
+        existing = sources_by_logical_path[logical_path]
+        if existing && existing != source_path
+          fail_with("header #{logical_path} maps to two files: #{existing}, #{source_path}")
+        end
+        sources_by_logical_path[logical_path] = source_path
+      end
+    end
+  end
+
+  mappings.concat(sources_by_logical_path.sort.to_a)
 else
-  fail_with("React VFS template or prebuilt Headers not found: #{template_path}, #{prebuilt_headers_path}")
+  fail_with(
+    "React headers not found. Looked for #{template_path}, #{prebuilt_headers_path}, #{pods_headers_path}"
+  )
 end
 
 fail_with("React header mappings are empty") if mappings.empty?
@@ -134,10 +176,8 @@ def mark_react_module_as_system(react_framework_path)
   # React-RCTAppDelegate is a submodule implemented by React.framework, not a
   # separate framework in the prebuilt React binary. Keep its public module in
   # a small static framework shim so SwiftPM can satisfy its auto-link option.
-  content.gsub!(
-    /\nframework module React_RCTAppDelegate \{\n\s*umbrella header "React_RCTAppDelegate\/React_RCTAppDelegate-umbrella\.h"\n\s*export \*\n\}\n*/,
-    "\n"
-  )
+  # RN 버전에 따라 블록 안의 줄(module * { export * } 등)이 달라서, 블록 전체를 지운다.
+  content.gsub!(/\n*framework module React_RCTAppDelegate \{.*?\n\}\n*/m, "\n")
   File.chmod((File.stat(module_map_path).mode & 0o777) | 0o200, module_map_path)
   File.write(module_map_path, content)
 end

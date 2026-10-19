@@ -30,7 +30,7 @@ npm run build:ios       # .nativepiece/output/ios/MyModule
 npm run build:android   # .nativepiece/output/android/maven
 ```
 
-`--rn 0.88`처럼 React Native 버전을 고를 수 있어요(검증한 버전: 0.86, 0.88). 만들어진 프로젝트에는 SwiftUI(`example/ios`)와 Jetpack Compose(`example/android`) 예제 호스트 앱이 들어 있어요.
+`--rn 0.88`처럼 React Native 버전을 고를 수 있어요(검증한 버전: 0.84~0.88). 만들어진 프로젝트에는 SwiftUI(`example/ios`)와 Jetpack Compose(`example/android`) 예제 호스트 앱이 들어 있어요.
 
 ### 기존 RN 앱을 모듈로 만들기
 
@@ -127,7 +127,7 @@ npx nativepiece publish android --url https://maven.pkg.github.com/my-org/my-mod
 
 ## 요구 사항
 
-- React Native 0.84 이상 (New Architecture, Hermes)
+- React Native 0.84 이상 (New Architecture, Hermes). 0.84, 0.85, 0.86, 0.87, 0.88을 검증했어요
 - Node 22.11 이상
 - iOS 빌드: Xcode, CocoaPods
 - Android 빌드: JDK 17, Android SDK

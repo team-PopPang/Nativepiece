@@ -630,7 +630,7 @@ P2 측정 결과는 [성능 측정 결과](performance.md)에 있어요. 시뮬�
 
 | 항목 | 지원 범위 |
 |---|---|
-| React Native | 0.84 이상 (iOS prebuilt core 기본 사용 버전부터). 0.86과 0.88을 검증했어요(iOS·Android 빌드와 예제 앱 실행). `create-nativepiece --rn <버전>`으로 고르고, 마이너 버전마다 바뀌는 RN 내부 구조는 CLI가 버전별로 처리해요. |
+| React Native | 0.84 이상. 0.84, 0.85, 0.86, 0.87, 0.88을 검증했어요(iOS·Android 모듈 빌드, 예제 앱 빌드와 실행). `create-nativepiece --rn <버전>`으로 고르고, 마이너 버전마다 바뀌는 RN 내부 구조는 CLI가 버전별로 처리해요. |
 | 아키텍처 | New Architecture만 지원해요 |
 | JS 엔진 | Hermes만 지원해요 |
 | iOS | 설정값 (기본 17.0). Swift 5.9 이상. Xcode는 RN 버전 요구사항을 따라요. |
@@ -693,7 +693,7 @@ API 기본 URL 하드코딩(`https://poppang.co.kr/api/v1`)은 Nativepiece와 �
 | JS 번들러 | Metro를 기본값으로 하고, Rollipop은 P3에서 선택 옵션으로 추가해요 | Rollipop은 아직 alpha 버전이에요 |
 | 배포 채널 | GitHub Release + GitHub Packages로 시작해요. `publish` 대상은 확장할 수 있게 만들어요 | 지금 PopPang이 쓰는 방식과 같아요 |
 | Android 패키징 | fat AAR + Maven 의존성 방식으로 바꿔요 | 결과물 크기(697MB)를 줄여요 |
-| 지원 RN 하한 | 0.84. 첫 릴리스 검증은 0.86으로 해요 | prebuilt core가 기본인 버전부터 지원해요 |
+| 지원 RN 하한 | 0.84 | prebuilt core가 기본인 버전부터 지원해요. 0.84는 iOS 헤더를 CocoaPods 헤더 링크에서 가져와요 |
 | 라이선스와 공개 범위 | 미정 | — |
 
 ### 13.1 구현하며 바뀐 결정 (2026-10-18, P0)
@@ -708,6 +708,16 @@ API 기본 URL 하드코딩(`https://poppang.co.kr/api/v1`)은 Nativepiece와 �
 
 | `create-nativepiece` 템플릿 | CI 워크플로(`.github/workflows/release.yml`) 포함 | CI 워크플로는 넣지 않았어요 | 배포 채널(P3)이 정해진 뒤 추가해요 |
 | 성능 지표 | `bundleLoad`, `bundleEval`, `surfaceFirstFrame`, `surfaceTTI` | `runtimeReady`, `surfaceMounted`, `surfaceReady` (`host.markReady()`) | JS가 알려 주는 시점으로 iOS·Android를 같은 기준으로 잴 수 있어요 |
+
+**RN 버전별 iOS 헤더 구조:**
+
+| RN | 구조 | 처리 |
+|---|---|---|
+| 0.84 | xcframework에는 Pod별 폴더(`React_jsi/jsi.h`)에 이름공간 없이 평평하게 들어 있고, 이름이 같은 파일 119개가 서로 덮어써서 일부가 없어요. CocoaPods 앱은 `Pods/Headers/{Public,Private}/<Pod>/<header_dir>/` 링크로 헤더를 찾아요 | 그 링크가 가리키는 react-native 원본 헤더(1144개)를 옮겨요. header_dir이 없는 Pod 루트 헤더는 Pod 이름을 이름공간으로 써요 |
+| 0.85, 0.86 | CocoaPods VFS overlay(`React-VFS-template.yaml`) | 매핑 파일을 읽어 실제 헤더로 옮겨요 |
+| 0.87, 0.88 | `React-Core-prebuilt/Headers/<이름공간>`에 실제 파일 | 폴더 구조를 그대로 옮겨요 |
+
+React module map 안의 `React_RCTAppDelegate` 블록은 버전마다 줄이 달라서(0.85는 `module * { export * }`가 더 있어요) 블록 전체를 지워요.
 
 **RN 0.88에서 바뀐 것 (P3):**
 - iOS: React 헤더가 CocoaPods VFS overlay 대신 `React-Core-prebuilt/Headers/<이름공간>`에 실제 파일로 있어요. 헤더 처리 스크립트가 두 구조를 모두 읽어요.

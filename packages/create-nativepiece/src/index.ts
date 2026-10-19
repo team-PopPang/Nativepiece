@@ -17,7 +17,7 @@ const BINARY_FILES = new Set(['gradle-wrapper.jar']);
 const EXECUTABLE_FILES = new Set(['gradlew']);
 
 // Nativepiece CI에서 빌드와 실행을 검증한 RN 버전이다. 템플릿 package.json의 기본 버전이기도 하다.
-const TESTED_RN_VERSIONS = ['0.86', '0.88'];
+const TESTED_RN_VERSIONS = ['0.84', '0.85', '0.86', '0.87', '0.88'];
 // prebuilt core와 New Architecture가 기본인 버전부터 지원한다.
 const MIN_RN_VERSION = [0, 84];
 
