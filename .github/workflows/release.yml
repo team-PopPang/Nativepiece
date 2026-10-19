@@ -1,43 +1,179 @@
 name: Release
 
-# v0.1.0 같은 태그를 푸시하면 npm 패키지 3개를 GitHub Packages에 발행해요.
-# 태그 버전과 각 package.json의 version이 같아야 해요.
+# Actions 화면의 Run workflow 버튼이나 `gh workflow run release.yml -f bump=patch`로 실행해요.
+# 버전 올리기 → 빌드·검사 → 커밋·태그 → npm 발행 → GitHub Release → 발행 검증을 한 번에 해요.
 on:
-  push:
-    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: "버전을 어떻게 올릴까요? custom이면 version 칸에 직접 입력해요"
+        required: true
+        default: patch
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+          - custom
+      version:
+        description: "bump가 custom일 때만 써요. 예: 0.2.0-beta.1"
+        required: false
+        type: string
+      release_mode:
+        description: "latest는 바로 발행해요. draft는 발행하지 않고 확인과 릴리스 노트 초안만 만들어요"
+        required: true
+        default: latest
+        type: choice
+        options:
+          - latest
+          - draft
+
+run-name: "${{ inputs.release_mode }} release (${{ inputs.bump }}${{ inputs.version && format(' {0}', inputs.version) || '' }})"
 
 permissions:
-  contents: read
+  contents: write
   packages: write
+  pull-requests: read
+
+concurrency:
+  group: release
+  cancel-in-progress: false
 
 jobs:
-  npm:
-    name: Publish npm packages
+  release:
+    name: ${{ inputs.release_mode }} release
     runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
     steps:
+      - name: Check branch
+        if: github.ref != 'refs/heads/main'
+        run: |
+          echo "::error::릴리스는 main에서만 실행할 수 있어요. 지금: ${{ github.ref }}"
+          exit 1
+
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
           registry-url: https://npm.pkg.github.com
           scope: '@team-poppang'
-      - run: npm ci
-      - run: npm run build
-      - name: Check versions
+
+      # 세 패키지는 항상 같은 버전이에요. 지금 버전과 bump로 새 버전을 계산해요.
+      - name: Resolve version
+        id: version
+        env:
+          BUMP: ${{ inputs.bump }}
+          CUSTOM_VERSION: ${{ inputs.version }}
         run: |
-          TAG="${GITHUB_REF_NAME#v}"
-          for pkg in packages/cli packages/runtime packages/create-nativepiece; do
-            VERSION=$(node -p "require('./$pkg/package.json').version")
-            if [ "$VERSION" != "$TAG" ]; then
-              echo "::error::$pkg version $VERSION does not match tag $TAG"
-              exit 1
-            fi
+          node --input-type=module <<'EOF'
+          import { readFileSync, appendFileSync } from 'node:fs';
+          const packages = ['cli', 'runtime', 'create-nativepiece'];
+          const versions = packages.map((name) => JSON.parse(readFileSync(`packages/${name}/package.json`, 'utf8')).version);
+          if (new Set(versions).size !== 1) {
+            console.log(`::error::세 패키지의 버전이 달라요: ${packages.map((name, i) => `${name}@${versions[i]}`).join(', ')}`);
+            process.exit(1);
+          }
+          const current = versions[0];
+          const semver = /^(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?$/;
+          let next;
+          if (process.env.BUMP === 'custom') {
+            next = (process.env.CUSTOM_VERSION ?? '').trim().replace(/^v/, '');
+            if (!semver.test(next)) {
+              console.log(`::error::version이 x.y.z 형식이 아니에요: "${next}"`);
+              process.exit(1);
+            }
+          } else {
+            const [, major, minor, patch, pre] = current.match(semver).map((part, i) => (i > 0 && i < 4 ? Number(part) : part));
+            if (process.env.BUMP === 'major') next = `${major + 1}.0.0`;
+            if (process.env.BUMP === 'minor') next = `${major}.${minor + 1}.0`;
+            // 0.2.0-beta.1 같은 사전 배포 버전에서 patch를 고르면 정식 버전(0.2.0)을 내요.
+            if (process.env.BUMP === 'patch') next = pre ? `${major}.${minor}.${patch}` : `${major}.${minor}.${patch + 1}`;
+          }
+          console.log(`현재 ${current} → 새 버전 ${next}`);
+          appendFileSync(process.env.GITHUB_OUTPUT, `current=${current}\nversion=${next}\n`);
+          EOF
+
+      - name: Check tag
+        run: |
+          if git ls-remote --exit-code --tags origin "refs/tags/v${{ steps.version.outputs.version }}" > /dev/null; then
+            echo "::error::v${{ steps.version.outputs.version }} 태그가 이미 있어요. 배포한 버전은 다시 쓸 수 없어요."
+            exit 1
+          fi
+
+      - run: npm ci
+
+      - name: Bump versions
+        run: npm version "${{ steps.version.outputs.version }}" --workspaces --no-git-tag-version
+
+      - run: npm run build
+      - run: npm run typecheck
+
+      - name: Check package contents
+        run: |
+          for pkg in packages/runtime packages/cli packages/create-nativepiece; do
+            (cd "$pkg" && npm pack --dry-run)
           done
-      - name: Publish
+
+      - name: Commit and tag
+        if: inputs.release_mode == 'latest'
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -am "Release v$VERSION"
+          git tag "v$VERSION"
+          git push origin HEAD:main
+          git push origin "v$VERSION"
+
+      # 의존하는 순서대로 올려요. draft는 실제로 올리지 않고 확인만 해요.
+      - name: Publish npm packages
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DRY_RUN: ${{ inputs.release_mode == 'draft' && '--dry-run' || '' }}
         run: |
-          npm publish -w packages/runtime
-          npm publish -w packages/cli
-          npm publish -w packages/create-nativepiece
+          for pkg in packages/runtime packages/cli packages/create-nativepiece; do
+            npm publish -w "$pkg" $DRY_RUN
+            echo "$pkg" >> "$RUNNER_TEMP/published.txt"
+          done
+
+      - name: Create GitHub Release
+        uses: release-drafter/release-drafter@v7
+        with:
+          config-name: release-drafter.yml
+          version: ${{ steps.version.outputs.version }}
+          name: v${{ steps.version.outputs.version }}
+          tag: v${{ steps.version.outputs.version }}
+          commitish: main
+          publish: ${{ inputs.release_mode == 'latest' }}
+          latest: ${{ inputs.release_mode == 'latest' }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "## ${{ inputs.release_mode }} release v${{ steps.version.outputs.version }}"
+            echo ""
+            echo "- 이전 버전: ${{ steps.version.outputs.current }}"
+            echo "- 커밋·태그: ${{ inputs.release_mode == 'latest' && 'main에 올림' || '건너뜀 (draft)' }}"
+            echo "- npm 발행 완료: $(cat "$RUNNER_TEMP/published.txt" 2>/dev/null | tr '\n' ' ' || echo 없음)"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  # 사용자와 같은 방식(npm init)으로 발행된 패키지를 받아 빌드해요.
+  verify:
+    name: Verify v${{ needs.release.outputs.version }}
+    needs: release
+    if: inputs.release_mode == 'latest'
+    uses: ./.github/workflows/verify-published.yml
+    with:
+      version: ${{ needs.release.outputs.version }}
+      ios: true
+    permissions:
+      contents: read
+      packages: read

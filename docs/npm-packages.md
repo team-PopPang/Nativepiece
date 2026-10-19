@@ -58,61 +58,67 @@ cli나 runtime을 고친 뒤 다시 확인하려면, 위 프로젝트의 `node_m
 
 ## 새 버전 올리기
 
-### 1. 버전 올리기
+버튼 한 번으로 올려요. 버전 번호를 손으로 바꾸거나 태그를 직접 만들 필요가 없어요.
 
-레포 루트에서 세 패키지의 version을 한 번에 바꿔요. 태그는 아직 만들지 않아요.
+### 1. PR에 라벨 붙이기
 
-```bash
-npm version 0.1.1 --workspaces --no-git-tag-version
-```
+릴리스 노트는 지난 릴리스 뒤에 머지된 PR의 라벨로 자동 작성돼요(PopPang-iOS와 같은 방식이에요).
 
-버전 번호 규칙은 [semver](https://semver.org/lang/ko/)를 따라요.
+| 라벨 | 릴리스 노트 분류 |
+|---|---|
+| `✨ feature` | ✨ 새로운 기능이 추가되었어요 |
+| `🔧 fix`, `🔥 hotfix` | 🐞 자잘한 버그를 수정했어요 |
+| `⚙️ chore`, `🔨 refactor`, `✅ test`, `📃 docs` | 🛠 코드를 개선했어요 |
+| 라벨 없음 | 기타 변경 |
 
-| 바꾼 내용 | 올리는 자리 | 예 |
+### 2. Release 실행하기
+
+GitHub의 **Actions → Release → Run workflow**에서 고르고 실행해요. 브랜치는 `main`이어야 해요.
+
+| 입력 | 값 | 설명 |
 |---|---|---|
-| 버그 수정 | patch | `0.1.0` → `0.1.1` |
-| 기능 추가 (기존 사용법은 그대로) | minor | `0.1.1` → `0.2.0` |
-| 사용법이 바뀌는 변경 | 1.0 전에는 minor, 1.0 이후에는 major | `0.2.0` → `0.3.0` |
+| `bump` | `patch` / `minor` / `major` / `custom` | 지금 버전에서 자동으로 계산해요. 예: `0.1.0` + `patch` → `0.1.1` |
+| `version` | 예: `0.2.0-beta.1` | `bump`가 `custom`일 때만 써요 |
+| `release_mode` | `latest` / `draft` | `draft`는 아무것도 발행하지 않고 확인과 릴리스 노트 초안만 만들어요 |
 
-### 2. PR로 머지하기
+터미널에서는 이렇게 실행해요.
 
 ```bash
-git checkout -b release/0.1.1
-git commit -am "Release 0.1.1"
-git push -u origin release/0.1.1
-gh pr create --title "Release 0.1.1" --body "..."
+gh workflow run release.yml -f bump=patch                         # 0.1.0 → 0.1.1
+gh workflow run release.yml -f bump=minor -f release_mode=draft   # 발행 전에 미리 확인
+gh workflow run release.yml -f bump=custom -f version=0.2.0-beta.1
 ```
 
-CI(JS, Android RN 0.86·0.88)가 통과하면 머지해요.
+어떤 걸 고를지는 [semver](https://semver.org/lang/ko/) 규칙을 따라요.
 
-### 3. 태그 푸시하기
+| 바꾼 내용 | bump |
+|---|---|
+| 버그 수정 | `patch` |
+| 기능 추가 (기존 사용법은 그대로) | `minor` |
+| 사용법이 바뀌는 변경 | 1.0 전에는 `minor`, 1.0 이후에는 `major` |
+
+### 3. 워크플로가 하는 일
+
+`.github/workflows/release.yml`이 아래를 차례로 해요.
+
+| 단계 | 내용 | draft |
+|---|---|---|
+| 버전 계산·검증 | 세 패키지 버전이 같은지, 새 버전 형식이 맞는지, 같은 태그가 없는지 확인해요 | 같음 |
+| 버전 올리기 | `npm version <버전> --workspaces`로 세 `package.json`과 `package-lock.json`을 바꿔요 | 같음 (커밋 안 함) |
+| 빌드·검사 | `npm run build`, `typecheck`, `npm pack --dry-run` | 같음 |
+| 커밋·태그 | `Release v<버전>` 커밋을 `main`에 올리고 `v<버전>` 태그를 붙여요 | 건너뜀 |
+| npm 발행 | runtime → cli → create-nativepiece 순서로 GitHub Packages에 올려요 | `--dry-run` |
+| GitHub Release | `release-drafter`로 라벨 기반 릴리스 노트를 만들고 공개해요 | Draft Release만 |
+| 발행 검증 | `verify-published.yml`을 호출해요. 레지스트리에서 `npm init`으로 새 모듈을 만들어 Android(Linux)와 iOS(macOS, RN 0.86)로 빌드해요 | 건너뜀 |
+
+- 인증은 GitHub Actions가 주는 `GITHUB_TOKEN`을 써요. 개인 토큰은 필요 없어요.
+- 동시에 두 번 실행되지 않아요.
+- 실행 결과 화면의 Summary에 커밋·태그 여부와 발행된 패키지가 남아요.
+
+발행 검증만 다시 돌리려면 이렇게 해요.
 
 ```bash
-git checkout main && git pull
-git tag v0.1.1
-git push origin v0.1.1
-```
-
-태그를 푸시하면 `.github/workflows/release.yml`이 실행돼요.
-
-1. 코드를 받고 의존성을 설치한 뒤 빌드해요.
-2. 태그 버전(`0.1.1`)과 세 `package.json`의 version이 같은지 확인해요. 다르면 멈춰요.
-3. runtime → cli → create-nativepiece 순서로 `npm publish`해요.
-
-인증은 GitHub Actions가 주는 `GITHUB_TOKEN`을 써요(`permissions: packages: write`). 개인 토큰은 필요 없어요.
-
-### 4. 발행 결과 확인하기
-
-Release가 성공하면 `.github/workflows/verify-published.yml`이 자동으로 이어서 돌아요. 깨끗한 환경에서 사용자와 같은 방식으로 확인해요.
-
-1. `npm init @team-poppang/nativepiece@0.1.1`로 새 모듈을 만들어요.
-2. `doctor`로 점검해요.
-3. Android 빌드와 예제 앱 빌드를 해요.
-
-수동으로 다시 돌리려면 이렇게 해요.
-
-```bash
-gh workflow run verify-published.yml -f version=0.1.1
+gh workflow run verify-published.yml -f version=0.1.1 -f ios=true
 ```
 
 ## 받아 쓰는 쪽 설정
@@ -132,8 +138,10 @@ gh workflow run verify-published.yml -f version=0.1.1
 
 | 증상 | 원인 | 해결 |
 |---|---|---|
-| Release의 "Check versions" 단계에서 실패 | 태그와 `package.json` version이 달라요 | 태그를 지우고(`git push origin :refs/tags/v0.1.1`) 버전을 맞춘 뒤 다시 태그를 푸시해요 |
+| "Resolve version"에서 실패 | 세 패키지 버전이 서로 다르거나 custom 버전 형식이 틀렸어요 | 세 `package.json`의 version을 맞추거나 `x.y.z` 형식으로 다시 입력해요 |
+| "Check tag"에서 실패 | 같은 버전이 이미 릴리스됐어요 | 버전을 올려서 다시 실행해요 |
+| "Check branch"에서 실패 | `main`이 아닌 브랜치에서 실행했어요 | Run workflow에서 브랜치를 `main`으로 골라요 |
 | `npm publish`가 `409 Conflict` | 같은 버전이 이미 올라가 있어요. 같은 번호로는 다시 올릴 수 없어요 | 버전을 올려서 다시 배포해요 |
 | `npm install`이 `401`/`403` | 토큰이 없거나 `read:packages` 권한이 없어요 | `~/.npmrc` 토큰과 권한을 확인해요 |
 | `npm install`이 `404 Not Found` | `@team-poppang` scope가 GitHub Packages를 가리키지 않아요 | `.npmrc`에 `@team-poppang:registry=https://npm.pkg.github.com`이 있는지 확인해요 |
-| 일부 패키지만 올라감 | publish 도중 실패했어요 | 남은 패키지만 `npm publish -w packages/<이름>`으로 올리거나, 버전을 올려 다시 배포해요 |
+| 일부 패키지만 올라감 | publish 도중 실패했어요. 커밋과 태그는 이미 올라갔어요 | Summary에서 올라간 패키지를 확인하고, 다음 patch 버전으로 다시 실행해요 |
