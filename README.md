@@ -123,7 +123,7 @@ npx nativepiece publish android --url https://maven.pkg.github.com/my-org/my-mod
 
 ## Nativepiece 자체 배포
 
-`packages/*/package.json`의 version을 올리고 같은 버전의 태그(`v0.1.0` 등)를 푸시하면 `.github/workflows/release.yml`이 npm 패키지 3개를 GitHub Packages에 발행해요.
+`packages/*/package.json`의 version을 올리고 같은 버전의 태그(`v0.1.0` 등)를 푸시하면 `.github/workflows/release.yml`이 npm 패키지 3개를 GitHub Packages에 발행해요. 자세한 순서와 문제 해결은 [npm 패키지 만들기와 새 버전 올리기](docs/npm-packages.md)를 봐 주세요.
 
 ## 요구 사항
 
