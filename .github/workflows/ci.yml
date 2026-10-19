@@ -41,6 +41,18 @@ jobs:
         # create-nativepiece의 TESTED_RN_VERSIONS와 맞춰요.
         rn: ['0.84', '0.85', '0.86', '0.87', '0.88']
     steps:
+      # RN Android 빌드(NDK, Gradle 캐시, C++ debug·release 결과물)는 러너 기본 여유 공간(약 14GB)을 넘길 수 있어서,
+      # 쓰지 않는 사전 설치 도구를 먼저 지워요.
+      - name: Free disk space
+        run: |
+          df -h /
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/node_modules /opt/ghc /usr/local/.ghcup /usr/local/share/boost \
+            /opt/hostedtoolcache/CodeQL /opt/hostedtoolcache/Python /opt/hostedtoolcache/go /opt/hostedtoolcache/Ruby \
+            /usr/local/share/powershell /usr/share/swift /usr/local/julia* /opt/microsoft /opt/google
+          # RN이 쓰는 NDK(27.1.12297006)만 남겨요.
+          find "$ANDROID_HOME/ndk" -mindepth 1 -maxdepth 1 ! -name 27.1.12297006 -exec sudo rm -rf {} +
+          sudo docker image prune --all --force > /dev/null || true
+          df -h /
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
@@ -81,6 +93,18 @@ jobs:
       matrix:
         rn: ['0.84', '0.85', '0.86', '0.87', '0.88']
     steps:
+      # RN Android 빌드(NDK, Gradle 캐시, C++ debug·release 결과물)는 러너 기본 여유 공간(약 14GB)을 넘길 수 있어서,
+      # 쓰지 않는 사전 설치 도구를 먼저 지워요.
+      - name: Free disk space
+        run: |
+          df -h /
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/node_modules /opt/ghc /usr/local/.ghcup /usr/local/share/boost \
+            /opt/hostedtoolcache/CodeQL /opt/hostedtoolcache/Python /opt/hostedtoolcache/go /opt/hostedtoolcache/Ruby \
+            /usr/local/share/powershell /usr/share/swift /usr/local/julia* /opt/microsoft /opt/google
+          # RN이 쓰는 NDK(27.1.12297006)만 남겨요.
+          find "$ANDROID_HOME/ndk" -mindepth 1 -maxdepth 1 ! -name 27.1.12297006 -exec sudo rm -rf {} +
+          sudo docker image prune --all --force > /dev/null || true
+          df -h /
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
