@@ -584,9 +584,11 @@ export default defineContract({
 
 | 플랫폼 | 기본 배포 방식 | 비고 |
 |---|---|---|
-| iOS | GitHub Release에 XCFramework zip을 올리고, 배포 전용 레포의 `Package.swift`를 `binaryTarget(url:checksum:)`으로 갱신해요 | 호스트 앱은 `.package(url:exact:)`로 추가해요. 로컬 경로로 추가하는 방식도 지원해요. |
+| iOS | GitHub Release에 XCFramework zip을 올리고, `Package.swift`를 `binaryTarget(url:checksum:)`으로 갱신해요. 기본은 RN 레포 루트에 `Package.swift`를 두는 같은 레포 모드이고, `publish.ios.repo`를 넣으면 전용 레포 모드로 배포해요 ([README](../README.md#ios-배포)) | 호스트 앱은 `.package(url:exact:)`로 추가해요. 로컬 경로로 추가하는 방식도 지원해요. |
 | Android | Maven 저장소(GitHub Packages 또는 사내 저장소)에 발행해요 | `publish-local`로 mavenLocal 발행도 지원해요. |
 
+- 같은 레포 모드는 RN 소스를 건드리지 않아요. 레포 루트의 `Package.swift`와 `publish.ios.packageDir`(기본 `swift-package`)만 커밋해요. 커밋하지 않은 변경이 있거나 기본 브랜치가 아니면 배포하지 않아요.
+- 전용 레포 모드는 레포 내용을 모두 바꾸므로, 대상 레포에 `package.json`이나 Nativepiece가 만들지 않은 `Package.swift`가 있으면 배포하지 않아요.
 - 태그와 릴리스를 덮어쓰지 않아요. 같은 버전이 이미 있으면 실패해요. PopPang `release-rn.sh`처럼 태그를 지우고 다시 만들지 않아요.
 - dSYM, sourcemap은 별도 산출물로 올려요. 크래시 리포팅 도구에 올리는 훅(`onPublished`)을 설정으로 제공해요.
 

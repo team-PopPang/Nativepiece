@@ -128,7 +128,7 @@ program
   .description('빌드한 결과물을 배포해요')
   .argument('<platform>', 'ios | android')
   .option('--project-root <path>', 'RN 프로젝트 경로', '.')
-  .option('--repo <owner/name>', 'iOS 배포 레포 (기본값: publish.ios.repo)')
+  .option('--repo <owner/name>', 'iOS 전용 배포 레포. 생략하면 publish.ios.repo, 그것도 없으면 지금 레포에 배포해요')
   .option('--url <url>', 'Android Maven 저장소 주소 (기본값: publish.android.url)')
   .option('--dry-run', '올리지 않고 배포할 내용만 확인해요')
   .action(

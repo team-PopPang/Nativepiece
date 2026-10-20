@@ -12,3 +12,7 @@ example/android/build/
 example/android/app/build/
 example/android/local.properties
 .kotlin/
+
+# Swift Package (nativepiece publish ios)
+.build/
+.swiftpm/

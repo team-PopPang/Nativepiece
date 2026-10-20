@@ -59,7 +59,18 @@ const configSchema = z.object({
     .optional(),
   publish: z
     .object({
-      ios: z.object({ repo: z.string().regex(/^[\w.-]+\/[\w.-]+$/, 'owner/name 형식이어야 해요') }).optional(),
+      ios: z
+        .object({
+          // 생략하면 지금 git 레포(origin)에 배포한다. 다른 레포를 넣으면 그 레포 전체를 Swift Package로 채운다.
+          repo: z.string().regex(/^[\w.-]+\/[\w.-]+$/, 'owner/name 형식이어야 해요').optional(),
+          // 같은 레포에 배포할 때 Swift 소스를 둘 폴더. RN 프로젝트 기준 경로다.
+          packageDir: z
+            .string()
+            .regex(/^[\w.-]+(\/[\w.-]+)*$/, '상대 경로여야 해요 (예: swift-package)')
+            .refine((value) => !value.split('/').some((part) => part === '..' || part === '.'), '. 이나 ..은 쓸 수 없어요')
+            .default('swift-package'),
+        })
+        .optional(),
       android: z.object({ url: z.url() }).optional(),
     })
     .optional(),
@@ -88,7 +99,7 @@ export interface ResolvedConfig {
     abis: string[];
     compose: boolean;
   } | null;
-  publish: { ios?: { repo: string }; android?: { url: string } } | null;
+  publish: { ios?: { repo?: string; packageDir: string }; android?: { url: string } } | null;
   projectRoot: string;
   configPath: string;
 }

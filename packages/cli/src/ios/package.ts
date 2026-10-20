@@ -41,7 +41,13 @@ export type BinaryTargetSource = (name: string) => string;
 // 로컬 패키지는 Frameworks/ 경로를, 원격 패키지(publish)는 url과 checksum을 쓴다.
 const localBinary: BinaryTargetSource = (name) => `path: "Frameworks/${name}.xcframework"`;
 
-export function renderPackageSwift(config: ResolvedConfig, frameworks: PackageManifest, binary: BinaryTargetSource = localBinary): string {
+// sourcesRoot는 Package.swift 기준 소스 폴더다. 같은 레포 배포에서는 RN 프로젝트 안의 폴더를 가리킨다.
+export function renderPackageSwift(
+  config: ResolvedConfig,
+  frameworks: PackageManifest,
+  binary: BinaryTargetSource = localBinary,
+  sourcesRoot = 'Sources',
+): string {
   const binaryDependencies = frameworks.names.map((name) => `                "${name}",`).join('\n');
   const binaryTargets = frameworks.names
     .map((name) => `        .binaryTarget(name: "${name}", ${binary(name)}),`)
@@ -63,13 +69,13 @@ let package = Package(
         .target(
             name: "${config.name}",
             dependencies: ["${KIT_TARGET}"],
-            path: "Sources/${config.name}",
+            path: "${sourcesRoot}/${config.name}",
             resources: [.copy("ReactNative")]
         ),
         .target(
             name: "${KIT_TARGET}",
             dependencies: ["${BINARIES_TARGET}"],
-            path: "Sources/${KIT_TARGET}"
+            path: "${sourcesRoot}/${KIT_TARGET}"
         ),
         // React Native와 네이티브 모듈 XCFramework를 한 번에 링크하는 C 타깃이다.
         .target(
@@ -77,7 +83,7 @@ let package = Package(
             dependencies: [
 ${binaryDependencies}
             ],
-            path: "Sources/${BINARIES_TARGET}",
+            path: "${sourcesRoot}/${BINARIES_TARGET}",
             linkerSettings: [
 ${renderLinkerSettings(frameworks.linkerFlags)}
             ]
