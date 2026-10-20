@@ -87,20 +87,103 @@ MyModuleScreen(
 | `nativepiece build ios [--dev]` | Swift Package를 만들어요. `--dev`는 Metro와 Fast Refresh를 쓰는 개발용이에요 |
 | `nativepiece build android` | Maven 저장소를 만들어요 |
 | `nativepiece dev` | Metro 개발 서버를 띄워요 |
-| `nativepiece publish ios [--repo owner/name] [--dry-run]` | Swift Package를 배포 레포에 올려요. 바이너리는 GitHub Release에 올라가요 |
+| `nativepiece publish ios [--repo owner/name] [--dry-run]` | Swift Package를 배포해요. `--repo`가 없으면 지금 레포에 배포해요 ([iOS 배포](#ios-배포)) |
 | `nativepiece publish android [--url <maven url>] [--dry-run]` | 빌드한 Maven 저장소의 artifact를 원격 Maven 저장소에 올려요 |
 
 ## iOS 배포
 
-```bash
-npx nativepiece build ios
-npx nativepiece publish ios --repo my-org/my-module-ios
+iOS 앱은 Xcode에서 레포 URL로 Swift Package를 추가해요. Xcode는 레포 **루트**의 `Package.swift`를 읽어요. 그래서 `Package.swift`를 어느 레포에 둘지에 따라 배포 방식이 두 가지예요.
+
+| | 같은 레포 모드 (기본) | 전용 레포 모드 |
+|---|---|---|
+| 언제 쓰나요 | RN 레포 하나만 관리하고 싶을 때 | iOS 결과물을 RN 소스와 분리하고 싶을 때 |
+| 설정 | `publish.ios.repo`를 넣지 않아요 | `publish.ios.repo`에 다른 레포를 넣어요 |
+| `Package.swift` 위치 | RN 레포 루트 | 전용 레포 루트 |
+| 레포에서 바뀌는 파일 | `Package.swift`, `swift-package/`, `.gitignore`만 | 전용 레포의 모든 파일 |
+| 앱에서 추가할 URL | RN 레포 | 전용 레포 |
+| 필요한 레포 | 1개 | 2개 |
+
+### 같은 레포 모드
+
+RN 레포에서 실행하면 그 레포(git `origin`)에 바로 배포해요. RN 소스는 건드리지 않고, 레포 루트의 `Package.swift`와 RN 프로젝트 안의 `swift-package/` 폴더만 커밋해요.
+
+```mermaid
+flowchart TD
+    subgraph RN["RN 레포 (예: PopPang-RN)"]
+        direction TB
+        SRC["src/, package.json<br/>RN 소스 (그대로)"]
+        BUILD["nativepiece build ios"]
+        PUB["nativepiece publish ios"]
+        PKG["Package.swift<br/>swift-package/<br/>(자동 생성·커밋)"]
+        REL["GitHub Release<br/>XCFramework zip"]
+        TAG["버전 태그 1.0.1"]
+        SRC --> BUILD --> PUB
+        PUB --> PKG
+        PUB --> REL
+        PUB --> TAG
+    end
+    APP["iOS 앱 (예: PopPang-iOS)<br/>.package(url: RN 레포, exact: 1.0.1)"]
+    TAG --> APP
+    PKG -.->|"Package.swift를 읽어요"| APP
+    REL -.->|"바이너리를 받아요"| APP
 ```
 
-- 배포 레포에는 원격용 `Package.swift`와 소스가 커밋되고 버전 태그(`config.version`)가 붙어요. XCFramework는 그 태그의 GitHub Release에 zip으로 올라가요.
-- 앱에서는 `.package(url: "https://github.com/my-org/my-module-ios", exact: "1.0.0")`로 추가해요.
-- 같은 버전은 덮어쓰지 않아요. 배포할 때마다 `package.json`의 version을 올려요.
-- 배포 레포가 비공개면 Xcode가 바이너리를 받을 수 있게 앱 개발자 PC와 CI의 `~/.netrc`에 읽기 토큰을 넣어야 해요. git clone 인증도 같은 파일로 할 수 있어요.
+```bash
+npx nativepiece build ios
+npx nativepiece publish ios       # --repo 없이 실행해요
+```
+
+배포 전에 아래 조건을 확인하고, 하나라도 맞지 않으면 아무것도 바꾸지 않고 멈춰요.
+
+- 커밋하지 않은 변경이 없어요. 배포 커밋에 다른 변경이 섞이지 않게 해요.
+- 기본 브랜치(main)에 있고, 로컬과 `origin`이 같아요.
+- 레포 루트에 Nativepiece가 만들지 않은 `Package.swift`가 없어요.
+
+Swift 소스 폴더 이름은 `publish.ios.packageDir`로 바꿀 수 있어요(기본값 `swift-package`). RN 프로젝트가 레포 하위 폴더에 있어도 `Package.swift`는 git 루트에 만들어요.
+
+### 전용 레포 모드
+
+`publish.ios.repo`(또는 `--repo`)에 다른 레포를 넣으면 그 레포를 Swift Package 전용으로 써요. 배포할 때마다 전용 레포의 내용을 이번 버전의 `Package.swift`와 소스로 **모두 바꿔요.**
+
+```mermaid
+flowchart TD
+    subgraph RN["RN 레포 (예: PopPang-RN)"]
+        direction TB
+        SRC["src/, package.json<br/>RN 소스"]
+        BUILD["nativepiece build ios"]
+        PUB["nativepiece publish ios<br/>--repo my-org/my-module-ios"]
+        SRC --> BUILD --> PUB
+    end
+    subgraph IOSREPO["전용 레포 (예: PopPang-RN-iOS)"]
+        direction TB
+        PKG["Package.swift<br/>Sources/<br/>(전체 교체·커밋)"]
+        REL["GitHub Release<br/>XCFramework zip"]
+        TAG["버전 태그 1.0.1"]
+    end
+    PUB --> PKG
+    PUB --> REL
+    PUB --> TAG
+    APP["iOS 앱 (예: PopPang-iOS)<br/>.package(url: 전용 레포, exact: 1.0.1)"]
+    TAG --> APP
+    PKG -.->|"Package.swift를 읽어요"| APP
+    REL -.->|"바이너리를 받아요"| APP
+```
+
+```ts
+// nativepiece.config.ts
+publish: {
+  ios: { repo: 'my-org/my-module-ios' },
+},
+```
+
+전용 레포 루트에 `package.json`이 있거나 Nativepiece가 만들지 않은 `Package.swift`가 있으면 멈춰요. RN 레포를 전용 레포로 잘못 지정해 소스가 지워지는 일을 막아요. `repo`에 지금 레포를 넣으면 같은 레포 모드로 배포해요.
+
+### 두 모드 공통
+
+- 버전 태그는 `config.version`(기본값 `package.json`의 version)이에요. 같은 버전은 덮어쓰지 않아요. 배포할 때마다 version을 올려요.
+- XCFramework는 그 태그의 GitHub Release에 zip으로 올라가요. JS 번들(`main.jsbundle`)은 Swift Package 리소스라서 레포에 커밋돼요.
+- `--dry-run`을 붙이면 아무것도 올리지 않고, 배포할 파일만 `.nativepiece/publish/ios`에 만들어 보여 줘요.
+- 레포가 비공개면 Xcode가 git과 바이너리를 받을 수 있게 앱 개발자 PC와 CI의 `~/.netrc`에 읽기 토큰을 넣어야 해요.
 
 ```
 machine api.github.com
