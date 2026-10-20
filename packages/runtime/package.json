@@ -1,6 +1,6 @@
 {
   "name": "@team-poppang/nativepiece-runtime",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "JS runtime and native bridge for Nativepiece modules",
   "main": "src/index.tsx",
   "types": "src/index.tsx",

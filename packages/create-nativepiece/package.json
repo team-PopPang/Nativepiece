@@ -1,6 +1,6 @@
 {
   "name": "@team-poppang/create-nativepiece",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Create a React Native module app that builds into a Swift Package and an Android AAR",
   "type": "module",
   "bin": {

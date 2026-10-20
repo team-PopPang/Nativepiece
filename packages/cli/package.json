@@ -1,6 +1,6 @@
 {
   "name": "@team-poppang/nativepiece-cli",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Build a React Native app into a Swift Package and an Android AAR",
   "type": "module",
   "bin": {
