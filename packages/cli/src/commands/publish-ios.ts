@@ -289,14 +289,21 @@ export async function publishIOS(config: ResolvedConfig, project: RNProject, opt
   const byName = new Map(assets.map((asset) => [asset.name, asset]));
 
   if (options.dryRun) {
+    // 같은 레포는 지금 .gitignore를 복사해 두고 비교해서, 실제로 바뀔 때만 목록에 넣는다.
+    const gitignore = target.mode === 'same' ? path.join(target.gitRoot, '.gitignore') : null;
+    const gitignoreBefore = gitignore && existsSync(gitignore) ? await readFile(gitignore, 'utf8') : null;
+    if (gitignoreBefore !== null) await writeFile(path.join(stageDir, '.gitignore'), gitignoreBefore);
     await stagePackage(config, packageDir, stageDir, target, manifest, (name) => {
       const asset = byName.get(name)!;
       return `url: "https://github.com/${repo}/releases/download/${version}/${assetName(name)}", checksum: "${asset.checksum}"`;
     });
     log.success(`배포할 내용을 만들었어요 (dry run): ${publishDir}`);
     if (target.mode === 'same') {
-      log.info('레포에서 바뀌는 파일 (.gitignore에는 .build/와 .swiftpm/이 없을 때만 추가돼요):');
-      for (const file of await listFiles(stageDir)) log.info(`  ${file}`);
+      const gitignoreChanged = (await readFile(path.join(stageDir, '.gitignore'), 'utf8')) !== gitignoreBefore;
+      log.info('레포에서 바뀌는 파일:');
+      for (const file of await listFiles(stageDir)) {
+        if (file !== '.gitignore' || gitignoreChanged) log.info(`  ${file}`);
+      }
     }
     return;
   }
