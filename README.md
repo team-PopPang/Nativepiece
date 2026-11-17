@@ -342,6 +342,7 @@ publish: {
 
 - 버전 태그는 `config.version`(기본값 `package.json`의 version)이에요. 같은 버전은 덮어쓰지 않아요. 배포할 때마다 version을 올려요.
 - XCFramework는 그 태그의 GitHub Release에 zip으로 올라가요. JS 번들(`main.jsbundle`)은 Swift Package 리소스라서 레포에 커밋돼요.
+- 패키지 파일은 `.gitignore`에 걸려도 강제로 커밋하고, 커밋 전에 모두 들어갔는지 확인해요. RN 기본 `.gitignore`의 `*.jsbundle`, `node_modules/`가 JS 번들과 assets를 빼는 것을 막아요. 같은 레포 모드는 `.gitignore`에 `!/swift-package/**`도 넣어요. `--dry-run`은 지금 `.gitignore`에 걸리는 파일을 알려 줘요.
 - `--dry-run`을 붙이면 아무것도 올리지 않고, 배포할 파일만 `.nativepiece/publish/ios`에 만들어 보여 줘요.
 - 레포가 비공개면 Xcode가 git과 바이너리를 받을 수 있게 앱 개발자 PC와 CI의 `~/.netrc`에 읽기 토큰을 넣어야 해요.
 

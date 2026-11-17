@@ -91,7 +91,8 @@ async function stagePackage(
   const gitignorePath = path.join(rootDir, '.gitignore');
   const gitignore = existsSync(gitignorePath) ? await readFile(gitignorePath, 'utf8') : '';
   const lines = new Set(gitignore.split('\n').map((line) => line.trim()));
-  const missing = ['.build/', '.swiftpm/'].filter((entry) => !lines.has(entry));
+  // RN 기본 .gitignore의 *.jsbundle, node_modules/ 같은 규칙이 JS 번들과 assets를 빼지 않게, 패키지 소스 폴더는 모두 다시 포함한다.
+  const missing = ['.build/', '.swiftpm/', packageSourcesRule(sourcesRoot)].filter((entry) => !lines.has(entry));
   if (missing.length > 0) {
     const prefix = gitignore && !gitignore.endsWith('\n') ? '\n' : '';
     await appendFile(gitignorePath, `${prefix}\n# Swift Package (nativepiece publish ios)\n${missing.join('\n')}\n`);
@@ -118,6 +119,37 @@ async function tagExists(repo: string, tag: string): Promise<boolean> {
 
 function git(cwd: string, ...args: string[]): Promise<string> {
   return run('git', ['-C', cwd, ...args], { inherit: false }).then((output) => output.trim());
+}
+
+// 패키지 소스 폴더를 .gitignore에서 다시 포함하는 규칙. 루트 기준 경로로 써서 다른 폴더에는 영향이 없다.
+function packageSourcesRule(sourcesRoot: string): string {
+  return `!/${sourcesRoot.split(path.sep).join('/')}/**`;
+}
+
+// .gitignore 규칙에 걸리는 파일. 배포에서는 강제로 추가하지만 dry run에서 미리 알려 준다.
+async function ignoredFiles(gitRoot: string, files: string[]): Promise<string[]> {
+  if (files.length === 0) return [];
+  try {
+    const result = await git(gitRoot, 'check-ignore', '--no-index', '--', ...files);
+    return result.split('\n').map((line) => line.trim()).filter(Boolean);
+  } catch (error) {
+    // check-ignore는 걸리는 파일이 하나도 없으면 exit 1로 끝난다.
+    if (error instanceof Error && error.message.includes('(exit 1)')) return [];
+    throw error;
+  }
+}
+
+// 커밋하기 전에 패키지 파일이 모두 index에 들어갔는지 확인한다. 하나라도 빠지면 Xcode가 받은 패키지가 번들이나 소스를 찾지 못한다.
+async function assertAllStaged(gitRoot: string, expected: string[]) {
+  const staged = new Set((await git(gitRoot, 'ls-files', '--cached', '--', ...expected)).split('\n').filter(Boolean));
+  const missing = expected.filter((file) => !staged.has(file));
+  if (missing.length > 0) {
+    throw new Error(
+      `패키지 파일 ${missing.length}개가 git에 들어가지 않았어요. 커밋하지 않고 멈췄어요.\n` +
+        missing.slice(0, 20).map((file) => `  ${file}`).join('\n') +
+        (missing.length > 20 ? `\n  … 외 ${missing.length - 20}개` : ''),
+    );
+  }
 }
 
 // https://github.com/owner/name(.git)와 git@github.com:owner/name(.git)를 owner/name으로 바꾼다.
@@ -223,7 +255,9 @@ async function pushPackageRepository(repo: string, version: string, stageDir: st
     await cp(stageDir, cloneDir, { recursive: true });
 
     const branch = (await git(cloneDir, 'symbolic-ref', '--short', 'HEAD').catch(() => 'main')) || 'main';
-    await git(cloneDir, 'add', '-A');
+    // 전역 gitignore(core.excludesFile)에 걸려도 패키지 파일이 빠지지 않게 강제로 추가하고 확인한다.
+    await git(cloneDir, 'add', '-A', '--force');
+    await assertAllStaged(cloneDir, await listFiles(stageDir));
     await git(cloneDir, 'commit', '-m', `Release ${version}`);
     await git(cloneDir, 'tag', version);
     await git(cloneDir, 'push', 'origin', `HEAD:${branch}`);
@@ -236,7 +270,13 @@ async function pushPackageRepository(repo: string, version: string, stageDir: st
 // 지금 레포에 배포 파일만 커밋하고 태그를 붙여 푸시한다. 다른 파일은 사전 확인에서 깨끗한 상태임을 확인했다.
 async function pushSameRepository(target: Extract<PublishTarget, { mode: 'same' }>, version: string) {
   const branch = await git(target.gitRoot, 'symbolic-ref', '--short', 'HEAD');
-  await git(target.gitRoot, 'add', '-A', '--', 'Package.swift', '.gitignore', target.sourcesRoot);
+  await git(target.gitRoot, 'add', '-A', '--', 'Package.swift', '.gitignore');
+  // 패키지 소스는 이번에 새로 만든 파일뿐이라, .gitignore에 걸려도(예: RN 기본값 *.jsbundle) 강제로 추가한다.
+  await git(target.gitRoot, 'add', '-A', '--force', '--', target.sourcesRoot);
+  const sourceFiles = (await listFiles(path.join(target.gitRoot, target.sourcesRoot))).map((file) =>
+    path.posix.join(target.sourcesRoot.split(path.sep).join('/'), file.split(path.sep).join('/')),
+  );
+  await assertAllStaged(target.gitRoot, ['Package.swift', ...sourceFiles]);
   await git(target.gitRoot, 'commit', '-m', `Release ${version}`);
   await git(target.gitRoot, 'tag', version);
   await git(target.gitRoot, 'push', 'origin', `HEAD:${branch}`);
@@ -301,8 +341,15 @@ export async function publishIOS(config: ResolvedConfig, project: RNProject, opt
     if (target.mode === 'same') {
       const gitignoreChanged = (await readFile(path.join(stageDir, '.gitignore'), 'utf8')) !== gitignoreBefore;
       log.info('레포에서 바뀌는 파일:');
-      for (const file of await listFiles(stageDir)) {
+      const files = await listFiles(stageDir);
+      for (const file of files) {
         if (file !== '.gitignore' || gitignoreChanged) log.info(`  ${file}`);
+      }
+      // 지금 레포의 .gitignore 기준으로 걸리는 파일. 배포 때는 다시 포함 규칙을 넣고 강제로 추가한다.
+      const ignored = await ignoredFiles(target.gitRoot, files.filter((file) => file !== '.gitignore'));
+      if (ignored.length > 0) {
+        log.warn(`지금 .gitignore에 걸리는 파일 ${ignored.length}개는 배포할 때 강제로 커밋해요 (.gitignore에 ${packageSourcesRule(target.sourcesRoot)} 추가):`);
+        for (const file of ignored) log.warn(`  ${file}`);
       }
     }
     return;
